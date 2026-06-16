@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -19,34 +20,55 @@ import { fixieColors, fixieShadows } from "../../lib/fixie-theme";
 import { supabase } from "../../lib/supabase";
 import CustomerBottomNav from "./components/CustomerBottomNav";
 
+const TRADE_CATEGORIES = [
+  { label: "All", icon: "grid-outline", keywords: [] },
+  { label: "Plumbing", icon: "water-outline", keywords: ["plumb", "drain", "pipe", "leak", "water"] },
+  { label: "Electrical", icon: "flash-outline", keywords: ["electric", "wiring", "lighting", "breaker"] },
+  { label: "HVAC", icon: "thermometer-outline", keywords: ["hvac", "heating", "cooling", "air", "furnace", "ac"] },
+  { label: "Construction", icon: "construct-outline", keywords: ["construction", "build", "remodel", "renovation"] },
+  { label: "Roofing", icon: "home-outline", keywords: ["roof", "gutter", "siding"] },
+  { label: "Painting", icon: "color-palette-outline", keywords: ["paint", "drywall", "wall"] },
+  { label: "Cleaning", icon: "sparkles-outline", keywords: ["clean", "maid", "janitorial"] },
+  { label: "Landscaping", icon: "leaf-outline", keywords: ["landscape", "lawn", "yard", "tree"] },
+  { label: "Handyman", icon: "hammer-outline", keywords: ["handyman", "repair", "maintenance", "general"] },
+];
+
 export default function CustomerHome() {
   const [customerID, setCustomerID] = useState(null);
   const [customerData, setCustomerData] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMode, setModalMode] = useState("request");
   const [selectedCompany, setSelectedCompany] = useState(null);
+  const [selectedCompanyName, setSelectedCompanyName] = useState("");
   const [companies, setCompanies] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [search, setSearch] = useState("");
+  const [selectedTrade, setSelectedTrade] = useState(TRADE_CATEGORIES[0]);
   const [loading, setLoading] = useState(true);
+  const [reviewsVisible, setReviewsVisible] = useState(false);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviews, setReviews] = useState([]);
+  const [avgRating, setAvgRating] = useState("0.0");
 
   useEffect(() => {
     loadData();
   }, []);
 
   useEffect(() => {
-    if (search.trim() === "") {
-      setFiltered(companies);
-    } else {
-      setFiltered(
-        companies.filter(
-          (c) =>
-            c.CompanyName?.toLowerCase().includes(search.toLowerCase()) ||
-            c.CompanyField?.toLowerCase().includes(search.toLowerCase())
-        )
-      );
-    }
-  }, [search, companies]);
+    const query = search.trim().toLowerCase();
+    const activeKeywords = selectedTrade.keywords;
+
+    setFiltered(
+      companies.filter((company) => {
+        const name = company.CompanyName?.toLowerCase() || "";
+        const field = company.CompanyField?.toLowerCase() || "";
+        const matchesSearch = !query || name.includes(query) || field.includes(query);
+        const matchesTrade = activeKeywords.length === 0 || activeKeywords.some((keyword) => field.includes(keyword));
+
+        return matchesSearch && matchesTrade;
+      })
+    );
+  }, [search, selectedTrade, companies]);
 
   const loadData = async () => {
     try {
@@ -103,10 +125,34 @@ export default function CustomerHome() {
     setModalVisible(true);
   };
 
-  const openReview = (companyID) => {
-    setSelectedCompany(companyID);
-    setModalMode("review");
-    setModalVisible(true);
+  const openReviews = async (company) => {
+    setSelectedCompany(company.CompanyID);
+    setSelectedCompanyName(company.CompanyName || "Company");
+    setReviews([]);
+    setAvgRating("0.0");
+    setReviewsVisible(true);
+    setReviewsLoading(true);
+
+    try {
+      const { data, error } = await supabase
+        .from("ReviewTable")
+        .select(`CustomerID, Stars, Review, CustomerTable (CustomerName)`)
+        .eq("CompanyID", company.CompanyID);
+
+      if (error) throw error;
+
+      const nextReviews = data || [];
+      setReviews(nextReviews);
+      if (nextReviews.length > 0) {
+        const total = nextReviews.reduce((sum, item) => sum + Number(item.Stars || 0), 0);
+        setAvgRating((total / nextReviews.length).toFixed(1));
+      }
+    } catch (error) {
+      console.log("Reviews load error:", error);
+      setReviews([]);
+    } finally {
+      setReviewsLoading(false);
+    }
   };
 
   if (loading) {
@@ -156,9 +202,44 @@ export default function CustomerHome() {
           <Text style={styles.heroText}>Browse companies, review specialties, and manage your property repairs all in one place.</Text>
         </View>
 
+        <View style={styles.tradeSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.boxTitle}>Browse by trade</Text>
+            {selectedTrade.label !== "All" && (
+              <TouchableOpacity onPress={() => setSelectedTrade(TRADE_CATEGORIES[0])} style={styles.clearTradeButton}>
+                <Text style={styles.clearTradeText}>Clear</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tradeScroller}>
+            {TRADE_CATEGORIES.map((trade) => {
+              const isActive = selectedTrade.label === trade.label;
+
+              return (
+                <TouchableOpacity
+                  key={trade.label}
+                  style={[styles.tradeButton, isActive && styles.tradeButtonActive]}
+                  onPress={() => setSelectedTrade(trade)}
+                  activeOpacity={0.75}
+                >
+                  <View style={[styles.tradeIconWrap, isActive && styles.tradeIconWrapActive]}>
+                    <Ionicons name={trade.icon} size={24} color={isActive ? fixieColors.background : fixieColors.goldLight} />
+                  </View>
+                  <Text style={[styles.tradeLabel, isActive && styles.tradeLabelActive]} numberOfLines={1}>
+                    {trade.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
         <View style={styles.sectionHeader}>
           <Text style={styles.boxTitle}>Companies</Text>
-          <Text style={styles.sectionMeta}>{filtered.length} available</Text>
+          <Text style={styles.sectionMeta}>
+            {filtered.length} {selectedTrade.label === "All" ? "available" : selectedTrade.label.toLowerCase()}
+          </Text>
         </View>
 
         <View style={styles.cardsRow}>
@@ -188,14 +269,21 @@ export default function CustomerHome() {
 
                 <TouchableOpacity
                   style={[styles.cardAction, styles.reviewAction]}
-                  onPress={(e) => { e.stopPropagation(); openReview(company.CompanyID); }}
+                  onPress={(e) => { e.stopPropagation(); openReviews(company); }}
                 >
                   <Ionicons name="star" size={12} color={fixieColors.goldLight} />
-                  <Text style={styles.cardActionText}>Review</Text>
+                  <Text style={styles.cardActionText}>Reviews</Text>
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
           ))}
+          {filtered.length === 0 && (
+            <View style={styles.emptyState}>
+              <Ionicons name="search-outline" size={28} color={fixieColors.goldLight} />
+              <Text style={styles.emptyTitle}>No matching companies</Text>
+              <Text style={styles.emptyText}>Try another trade or search term to find the right contractor.</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -208,6 +296,61 @@ export default function CustomerHome() {
         customerID={customerID}
         mode={modalMode}
       />
+
+      <Modal visible={reviewsVisible} transparent animationType="slide" onRequestClose={() => setReviewsVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>{selectedCompanyName}</Text>
+                <Text style={styles.modalSubtitle}>Customer reviews</Text>
+              </View>
+              <TouchableOpacity onPress={() => setReviewsVisible(false)} style={styles.modalClose}>
+                <Ionicons name="close" size={20} color={fixieColors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {reviewsLoading ? (
+              <View style={styles.reviewsLoading}>
+                <ActivityIndicator color={fixieColors.gold} />
+              </View>
+            ) : (
+              <>
+                <View style={styles.ratingRow}>
+                  <Ionicons name="star" size={20} color={fixieColors.goldLight} />
+                  <Text style={styles.ratingText}>{avgRating}</Text>
+                  <Text style={styles.ratingCount}>({reviews.length} {reviews.length === 1 ? "review" : "reviews"})</Text>
+                </View>
+
+                <ScrollView style={styles.reviewsList} showsVerticalScrollIndicator={false}>
+                  {reviews.length === 0 ? (
+                    <Text style={styles.noReviews}>No reviews yet.</Text>
+                  ) : (
+                    reviews.map((item, index) => (
+                      <View key={`${item.CustomerID}-${index}`} style={styles.reviewCard}>
+                        <View style={styles.reviewTopRow}>
+                          <Text style={styles.reviewName}>{item.CustomerTable?.CustomerName || "Customer"}</Text>
+                          <View style={styles.reviewStarsRow}>
+                            {[1, 2, 3, 4, 5].map((value) => (
+                              <Ionicons
+                                key={value}
+                                name={value <= Number(item.Stars || 0) ? "star" : "star-outline"}
+                                size={14}
+                                color={fixieColors.goldLight}
+                              />
+                            ))}
+                          </View>
+                        </View>
+                        <Text style={styles.reviewBody}>{item.Review || ""}</Text>
+                      </View>
+                    ))
+                  )}
+                </ScrollView>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -312,6 +455,9 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: fixieColors.textSecondary,
   },
+  tradeSection: {
+    marginBottom: 18,
+  },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -326,6 +472,58 @@ const styles = StyleSheet.create({
   sectionMeta: {
     color: fixieColors.textMuted,
     fontSize: 12,
+  },
+  clearTradeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderWidth: 1,
+    borderColor: fixieColors.border,
+  },
+  clearTradeText: {
+    color: fixieColors.goldLight,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  tradeScroller: {
+    gap: 12,
+    paddingRight: 18,
+  },
+  tradeButton: {
+    width: 92,
+    alignItems: "center",
+    gap: 8,
+  },
+  tradeButtonActive: {
+    transform: [{ translateY: -1 }],
+  },
+  tradeIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: fixieColors.surface,
+    borderWidth: 1,
+    borderColor: fixieColors.border,
+    ...fixieShadows.card,
+  },
+  tradeIconWrapActive: {
+    backgroundColor: fixieColors.gold,
+    borderColor: fixieColors.goldLight,
+    ...fixieShadows.glow,
+  },
+  tradeLabel: {
+    width: "100%",
+    color: fixieColors.textSecondary,
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  tradeLabelActive: {
+    color: fixieColors.text,
+    fontWeight: "800",
   },
   cardsRow: {
     flexDirection: "row",
@@ -400,6 +598,30 @@ const styles = StyleSheet.create({
     color: fixieColors.goldLight,
     fontSize: 11,
     fontWeight: "700",
+  },
+  emptyState: {
+    width: "100%",
+    minHeight: 150,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: fixieColors.border,
+    backgroundColor: fixieColors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  emptyTitle: {
+    marginTop: 10,
+    color: fixieColors.text,
+    fontSize: 17,
+    fontWeight: "800",
+  },
+  emptyText: {
+    marginTop: 6,
+    color: fixieColors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
   },
   bottomBar: {
     flexDirection: "row",
@@ -493,6 +715,11 @@ const styles = StyleSheet.create({
     maxHeight: 320,
     marginBottom: 16,
   },
+  reviewsLoading: {
+    minHeight: 180,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   noReviews: {
     color: fixieColors.textMuted,
     fontSize: 15,
@@ -518,10 +745,9 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: fixieColors.text,
   },
-  reviewStars: {
-    fontSize: 15,
-    color: fixieColors.goldLight,
-    fontWeight: "700",
+  reviewStarsRow: {
+    flexDirection: "row",
+    gap: 2,
   },
   reviewBody: {
     fontSize: 13,

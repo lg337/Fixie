@@ -27,7 +27,7 @@ function LoginSwitch({ label, active, onPress }) {
   );
 }
 
-function InputRow({ icon, value, onChangeText, placeholder, secureTextEntry = false, keyboardType, trailingIcon, onTrailingPress }) {
+function InputRow({ icon, value, onChangeText, onBlur, placeholder, secureTextEntry = false, keyboardType, trailingIcon, onTrailingPress }) {
   return (
     <View style={styles.inputRow}>
       <Ionicons name={icon} size={20} color={fixieColors.textMuted} />
@@ -37,6 +37,7 @@ function InputRow({ icon, value, onChangeText, placeholder, secureTextEntry = fa
         placeholderTextColor={fixieColors.textMuted}
         value={value}
         onChangeText={onChangeText}
+        onBlur={onBlur}
         secureTextEntry={secureTextEntry}
         keyboardType={keyboardType}
         autoCapitalize="none"
@@ -55,6 +56,7 @@ export default function CompanyLogin() {
   const [companyId, setCompanyId] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordEntered, setPasswordEntered] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -66,6 +68,7 @@ export default function CompanyLogin() {
   const shellMaxWidth = isDesktopWeb ? 720 : isPhone ? 420 : 560;
   const shellPadding = isDesktopWeb ? 54 : isPhone ? 20 : 32;
   const topSpacing = isDesktopWeb ? 10 : isPhone ? 8 : 10;
+  const showValidationRules = passwordEntered && password.length > 0 && !isValidPassword(password);
 
   const handleLogin = async () => {
     setErrorMsg("");
@@ -86,6 +89,7 @@ export default function CompanyLogin() {
     }
 
     if (!isValidPassword(password)) {
+      setPasswordEntered(true);
       setErrorMsg(PASSWORD_ALLOWED_TEXT);
       return;
     }
@@ -176,14 +180,19 @@ export default function CompanyLogin() {
               icon="lock-closed-outline"
               value={password}
               onChangeText={setPassword}
+              onBlur={() => setPasswordEntered(true)}
               placeholder="Password"
               secureTextEntry={!showPassword}
               trailingIcon={showPassword ? "eye-off-outline" : "eye-outline"}
               onTrailingPress={() => setShowPassword((current) => !current)}
             />
 
-            <Text style={styles.validationText}>{USERNAME_ALLOWED_TEXT}</Text>
-            <Text style={styles.validationText}>{PASSWORD_ALLOWED_TEXT}</Text>
+            {showValidationRules ? (
+              <>
+                <Text style={styles.validationText}>{USERNAME_ALLOWED_TEXT}</Text>
+                <Text style={styles.validationText}>{PASSWORD_ALLOWED_TEXT}</Text>
+              </>
+            ) : null}
 
             {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
 
