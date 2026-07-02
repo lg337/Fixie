@@ -18,6 +18,7 @@ import FixieLogo from "../../components/FixieLogo";
 import RequestModal from "../../components/request";
 import { fixieColors, fixieShadows } from "../../lib/fixie-theme";
 import { supabase } from "../../lib/supabase";
+import useFixieLayout from "../../lib/useFixieLayout";
 import CustomerBottomNav from "./components/CustomerBottomNav";
 
 const TRADE_CATEGORIES = [
@@ -34,6 +35,7 @@ const TRADE_CATEGORIES = [
 ];
 
 export default function CustomerHome() {
+  const layout = useFixieLayout();
   const [customerID, setCustomerID] = useState(null);
   const [customerData, setCustomerData] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -165,7 +167,7 @@ export default function CustomerHome() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, layout.isDesktop && styles.desktopSection]}>
         <View style={styles.headerLeft}>
           <FixieLogo size={52} />
           <View>
@@ -185,7 +187,7 @@ export default function CustomerHome() {
         </View>
       </View>
 
-      <View style={styles.searchWrap}>
+      <View style={[styles.searchWrap, layout.isDesktop && styles.desktopSearchWrap]}>
         <Ionicons name="search" size={18} color={fixieColors.textMuted} />
         <TextInput
           style={styles.searchBar}
@@ -196,8 +198,8 @@ export default function CustomerHome() {
         />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.heroCard}>
+      <ScrollView contentContainerStyle={[styles.content, layout.isDesktop && styles.desktopContent]} showsVerticalScrollIndicator={false}>
+        <View style={[styles.heroCard, layout.isDesktop && styles.desktopHeroCard]}>
           <Text style={styles.heroTitle}>Find trusted contractors</Text>
           <Text style={styles.heroText}>Browse companies, review specialties, and manage your property repairs all in one place.</Text>
         </View>
@@ -242,9 +244,14 @@ export default function CustomerHome() {
           </Text>
         </View>
 
-        <View style={styles.cardsRow}>
+        <View style={[styles.cardsRow, layout.isDesktop && styles.desktopCardsRow]}>
           {filtered.map((company) => (
-            <TouchableOpacity key={company.CompanyID} style={styles.card} onPress={() => router.push({ pathname: "/customer/companyprofile", params: { id: company.CompanyID } })} activeOpacity={0.7}>
+            <TouchableOpacity
+              key={company.CompanyID}
+              style={[styles.card, layout.isPhone && styles.phoneCard, layout.isDesktop && styles.desktopCard]}
+              onPress={() => router.push({ pathname: "/customer/companyprofile", params: { id: company.CompanyID } })}
+              activeOpacity={0.7}
+            >
               {company.ProfileImageUrl ? (
                 <Image source={{ uri: company.ProfileImageUrl }} style={styles.image} />
               ) : (
@@ -374,6 +381,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
+  desktopSection: {
+    width: "100%",
+    maxWidth: 1180,
+    alignSelf: "center",
+    paddingHorizontal: 28,
+    paddingTop: 22,
+  },
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
@@ -425,6 +439,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
+  desktopSearchWrap: {
+    width: "100%",
+    maxWidth: 1180,
+    alignSelf: "center",
+    marginHorizontal: 0,
+  },
   searchBar: {
     flex: 1,
     color: fixieColors.text,
@@ -435,6 +455,13 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 22,
   },
+  desktopContent: {
+    width: "100%",
+    maxWidth: 1180,
+    alignSelf: "center",
+    paddingHorizontal: 28,
+    paddingBottom: 34,
+  },
   heroCard: {
     backgroundColor: fixieColors.surfaceElevated,
     borderRadius: 24,
@@ -443,6 +470,9 @@ const styles = StyleSheet.create({
     borderColor: fixieColors.border,
     marginBottom: 18,
     ...fixieShadows.card,
+  },
+  desktopHeroCard: {
+    padding: 28,
   },
   heroTitle: {
     fontSize: 22,
@@ -530,6 +560,9 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 12,
   },
+  desktopCardsRow: {
+    gap: 16,
+  },
   card: {
     width: "48%",
     backgroundColor: fixieColors.surface,
@@ -538,6 +571,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: fixieColors.border,
     ...fixieShadows.card,
+  },
+  phoneCard: {
+    width: "100%",
+  },
+  desktopCard: {
+    width: "23.9%",
+    minWidth: 240,
   },
   image: {
     width: "100%",
