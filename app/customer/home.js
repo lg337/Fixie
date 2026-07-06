@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -22,18 +22,109 @@ import { supabase } from "../../lib/supabase";
 import useFixieLayout from "../../lib/useFixieLayout";
 import CustomerBottomNav from "./components/CustomerBottomNav";
 
-const TRADE_CATEGORIES = [
-  { label: "All", icon: "grid-outline", keywords: [] },
-  { label: "Plumbing", icon: "water-outline", keywords: ["plumb", "drain", "pipe", "leak", "water"] },
-  { label: "Electrical", icon: "flash-outline", keywords: ["electric", "wiring", "lighting", "breaker"] },
-  { label: "HVAC", icon: "thermometer-outline", keywords: ["hvac", "heating", "cooling", "air", "furnace", "ac"] },
-  { label: "Construction", icon: "construct-outline", keywords: ["construction", "build", "remodel", "renovation"] },
-  { label: "Roofing", icon: "home-outline", keywords: ["roof", "gutter", "siding"] },
-  { label: "Painting", icon: "color-palette-outline", keywords: ["paint", "drywall", "wall"] },
-  { label: "Cleaning", icon: "sparkles-outline", keywords: ["clean", "maid", "janitorial"] },
-  { label: "Landscaping", icon: "leaf-outline", keywords: ["landscape", "lawn", "yard", "tree"] },
-  { label: "Handyman", icon: "hammer-outline", keywords: ["handyman", "repair", "maintenance", "general"] },
+const ALL_SERVICE_CATEGORY = { label: "All", icon: "grid-outline", keywords: [], custom: false };
+
+const SERVICE_CATALOG = [
+  { label: "Plumbing", icon: "water-outline", keywords: ["plumb", "drain", "pipe", "leak", "water", "toilet", "sink", "sewer"] },
+  { label: "Electrical", icon: "flash-outline", keywords: ["electric", "wiring", "lighting", "breaker", "outlet", "panel"] },
+  { label: "HVAC", icon: "thermometer-outline", keywords: ["hvac", "heating", "cooling", "air", "furnace", "ac", "a/c", "ventilation"] },
+  { label: "Construction", icon: "construct-outline", keywords: ["construction", "build", "builder", "remodel", "renovation", "contractor"] },
+  { label: "Roofing", icon: "home-outline", keywords: ["roof", "roofing", "gutter", "siding", "shingle"] },
+  { label: "Painting", icon: "color-palette-outline", keywords: ["paint", "painting", "stain", "drywall", "wall"] },
+  { label: "Cleaning", icon: "sparkles-outline", keywords: ["clean", "cleaning", "maid", "janitorial", "deep clean"] },
+  { label: "Landscaping", icon: "leaf-outline", keywords: ["landscape", "landscaping", "lawn", "yard", "tree", "mulch"] },
+  { label: "Handyman", icon: "hammer-outline", keywords: ["handyman", "repair", "maintenance", "general", "fix"] },
+  { label: "Appliance Repair", icon: "cube-outline", keywords: ["appliance", "washer", "dryer", "fridge", "refrigerator", "oven", "dishwasher"] },
+  { label: "Carpentry", icon: "hammer-outline", keywords: ["carpentry", "carpenter", "wood", "cabinet", "trim", "framing"] },
+  { label: "Flooring", icon: "grid-outline", keywords: ["floor", "flooring", "tile", "hardwood", "carpet", "vinyl", "laminate"] },
+  { label: "Windows", icon: "albums-outline", keywords: ["window", "windows", "glass", "screen", "door"] },
+  { label: "Locksmith", icon: "lock-closed-outline", keywords: ["lock", "locksmith", "key", "deadbolt"] },
+  { label: "Pest Control", icon: "bug-outline", keywords: ["pest", "bug", "termite", "exterminator", "rodent"] },
+  { label: "Security", icon: "shield-checkmark-outline", keywords: ["security", "alarm", "camera", "surveillance", "smart lock"] },
+  { label: "Snow Removal", icon: "snow-outline", keywords: ["snow", "ice", "plow", "salting"] },
+  { label: "Masonry", icon: "business-outline", keywords: ["masonry", "brick", "stone", "concrete", "cement", "patio"] },
+  { label: "Pressure Washing", icon: "water-outline", keywords: ["pressure wash", "power wash", "washing", "driveway"] },
+  { label: "Junk Removal", icon: "trash-outline", keywords: ["junk", "trash", "haul", "hauling", "debris"] },
+  { label: "Garage Doors", icon: "car-outline", keywords: ["garage", "garage door", "opener"] },
+  { label: "Smart Home", icon: "desktop-outline", keywords: ["smart home", "wifi", "network", "thermostat", "device"] },
+  { label: "Pool Service", icon: "water-outline", keywords: ["pool", "spa", "hot tub"] },
+  { label: "Fencing", icon: "reorder-three-outline", keywords: ["fence", "fencing", "gate"] },
+  { label: "Moving", icon: "cube-outline", keywords: ["moving", "mover", "packing"] },
 ];
+
+function normalizeServiceText(value = "") {
+  return String(value).trim().toLowerCase();
+}
+
+function splitCompanyServices(companyField = "") {
+  return String(companyField)
+    .split(/[,/&+;|]|\band\b/gi)
+    .map((service) => service.trim())
+    .filter(Boolean);
+}
+
+function titleCaseService(value) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function serviceMatchesCategory(company, category) {
+  if (!category?.keywords?.length) return true;
+
+  const serviceText = normalizeServiceText(company.CompanyField);
+  return category.keywords.some((keyword) => serviceText.includes(normalizeServiceText(keyword)));
+}
+
+function buildServiceCategories(companies) {
+  const companyCountByLabel = new Map();
+  const customServices = new Map();
+
+  companies.forEach((company) => {
+    const serviceText = normalizeServiceText(company.CompanyField);
+    if (!serviceText) return;
+
+    SERVICE_CATALOG.forEach((service) => {
+      if (service.keywords.some((keyword) => serviceText.includes(normalizeServiceText(keyword)))) {
+        companyCountByLabel.set(service.label, (companyCountByLabel.get(service.label) || 0) + 1);
+      }
+    });
+
+    splitCompanyServices(company.CompanyField).forEach((service) => {
+      const normalizedService = normalizeServiceText(service);
+      const isCoveredByCatalog = SERVICE_CATALOG.some((item) =>
+        item.keywords.some((keyword) => normalizedService.includes(normalizeServiceText(keyword)))
+      );
+
+      if (!isCoveredByCatalog && normalizedService.length > 1) {
+        const label = titleCaseService(service);
+        const existing = customServices.get(label);
+        customServices.set(label, {
+          label,
+          icon: "briefcase-outline",
+          keywords: [normalizedService],
+          custom: true,
+          count: (existing?.count || 0) + 1,
+        });
+      }
+    });
+  });
+
+  const catalogCategories = SERVICE_CATALOG.map((service) => ({
+    ...service,
+    custom: false,
+    count: companyCountByLabel.get(service.label) || 0,
+  }));
+
+  const customCategories = Array.from(customServices.values()).sort((a, b) => a.label.localeCompare(b.label));
+
+  return [
+    { ...ALL_SERVICE_CATEGORY, count: companies.length },
+    ...catalogCategories,
+    ...customCategories,
+  ];
+}
 
 export default function CustomerHome() {
   const layout = useFixieLayout();
@@ -46,13 +137,15 @@ export default function CustomerHome() {
   const [companies, setCompanies] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [search, setSearch] = useState("");
-  const [selectedTrade, setSelectedTrade] = useState(TRADE_CATEGORIES[0]);
+  const [selectedTrade, setSelectedTrade] = useState(ALL_SERVICE_CATEGORY);
   const [loading, setLoading] = useState(true);
   const [reviewsVisible, setReviewsVisible] = useState(false);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviews, setReviews] = useState([]);
   const [avgRating, setAvgRating] = useState("0.0");
   const [savedCompanyIDs, setSavedCompanyIDs] = useState([]);
+
+  const serviceCategories = useMemo(() => buildServiceCategories(companies), [companies]);
 
   useEffect(() => {
     loadData();
@@ -72,14 +165,14 @@ export default function CustomerHome() {
 
   useEffect(() => {
     const query = search.trim().toLowerCase();
-    const activeKeywords = selectedTrade.keywords;
+    const activeKeywords = selectedTrade.keywords || [];
 
     setFiltered(
       companies.filter((company) => {
         const name = company.CompanyName?.toLowerCase() || "";
-        const field = company.CompanyField?.toLowerCase() || "";
-        const matchesSearch = !query || name.includes(query) || field.includes(query);
-        const matchesTrade = activeKeywords.length === 0 || activeKeywords.some((keyword) => field.includes(keyword));
+        const serviceText = normalizeServiceText(company.CompanyField);
+        const matchesSearch = !query || name.includes(query) || serviceText.includes(query);
+        const matchesTrade = activeKeywords.length === 0 || serviceMatchesCategory(company, selectedTrade);
 
         return matchesSearch && matchesTrade;
       })
@@ -213,7 +306,7 @@ export default function CustomerHome() {
         <Ionicons name="search" size={18} color={fixieColors.textMuted} />
         <TextInput
           style={styles.searchBar}
-          placeholder="Search companies or trades..."
+          placeholder="Search companies or services..."
           placeholderTextColor={fixieColors.textMuted}
           value={search}
           onChangeText={setSearch}
@@ -228,22 +321,23 @@ export default function CustomerHome() {
 
         <View style={styles.tradeSection}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.boxTitle}>Browse by trade</Text>
+            <Text style={styles.boxTitle}>Browse by service</Text>
             {selectedTrade.label !== "All" && (
-              <TouchableOpacity onPress={() => setSelectedTrade(TRADE_CATEGORIES[0])} style={styles.clearTradeButton}>
+              <TouchableOpacity onPress={() => setSelectedTrade(ALL_SERVICE_CATEGORY)} style={styles.clearTradeButton}>
                 <Text style={styles.clearTradeText}>Clear</Text>
               </TouchableOpacity>
             )}
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tradeScroller}>
-            {TRADE_CATEGORIES.map((trade) => {
+            {serviceCategories.map((trade) => {
               const isActive = selectedTrade.label === trade.label;
+              const isEmptyService = trade.label !== "All" && trade.count === 0 && !trade.custom;
 
               return (
                 <TouchableOpacity
                   key={trade.label}
-                  style={[styles.tradeButton, isActive && styles.tradeButtonActive]}
+                  style={[styles.tradeButton, isEmptyService && styles.tradeButtonEmpty, isActive && styles.tradeButtonActive]}
                   onPress={() => setSelectedTrade(trade)}
                   activeOpacity={0.75}
                 >
@@ -252,6 +346,9 @@ export default function CustomerHome() {
                   </View>
                   <Text style={[styles.tradeLabel, isActive && styles.tradeLabelActive]} numberOfLines={1}>
                     {trade.label}
+                  </Text>
+                  <Text style={[styles.tradeCount, isActive && styles.tradeCountActive]}>
+                    {trade.count || 0}
                   </Text>
                 </TouchableOpacity>
               );
@@ -559,6 +656,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+  tradeButtonEmpty: {
+    opacity: 0.58,
+  },
   tradeButtonActive: {
     transform: [{ translateY: -1 }],
   },
@@ -585,9 +685,18 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "center",
   },
+  tradeCount: {
+    marginTop: -4,
+    color: fixieColors.textMuted,
+    fontSize: 11,
+    fontWeight: "700",
+  },
   tradeLabelActive: {
     color: fixieColors.text,
     fontWeight: "800",
+  },
+  tradeCountActive: {
+    color: fixieColors.goldLight,
   },
   cardsRow: {
     flexDirection: "row",
