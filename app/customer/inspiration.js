@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Image,
   Modal,
@@ -16,6 +17,9 @@ import {
 import { fixieColors, fixieShadows } from "../../lib/fixie-theme";
 import CustomerBottomNav from "./components/CustomerBottomNav";
 
+const SAVED_IDEAS_KEY = "fixie-saved-inspiration-ideas";
+const CUSTOM_IDEAS_KEY = "fixie-custom-inspiration-ideas";
+
 const AREAS = [
   { label: "All", icon: "grid-outline", keywords: [] },
   { label: "Kitchen", icon: "restaurant-outline", keywords: ["kitchen", "cabinet", "counter", "backsplash"] },
@@ -25,6 +29,14 @@ const AREAS = [
   { label: "Bedroom", icon: "bed-outline", keywords: ["bedroom", "closet"] },
   { label: "Entryway", icon: "home-outline", keywords: ["entry", "mudroom", "foyer"] },
   { label: "Laundry", icon: "shirt-outline", keywords: ["laundry", "utility"] },
+];
+
+const BOARDS = [
+  { label: "All Ideas", icon: "sparkles-outline", type: "all", keywords: [] },
+  { label: "Saved", icon: "heart-outline", type: "saved", keywords: [] },
+  { label: "Quick Wins", icon: "flash-outline", type: "keyword", keywords: ["paint", "hardware", "mirror", "lighting", "shelving"] },
+  { label: "Big Remodels", icon: "construct-outline", type: "keyword", keywords: ["cabinet", "counter", "shower", "deck", "tile", "built-in"] },
+  { label: "Outdoor", icon: "leaf-outline", type: "keyword", keywords: ["backyard", "patio", "deck", "garden", "outdoor", "pool"] },
 ];
 
 const INSPIRATION_IDEAS = [
@@ -330,28 +342,179 @@ const INSPIRATION_IDEAS = [
   },
 ];
 
+const EXTRA_IMAGE_IDEAS = [
+  ["modern-house-entry", "Entryway", "Modern front entry", "Curb Appeal", "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=900&q=80", "Clean exterior lines, warm lighting, and a defined entry make the home feel more polished.", ["Exterior lighting", "Door hardware", "Entry landscaping"], ["entry", "exterior", "lighting", "curb appeal"]],
+  ["bright-home-office", "Living Room", "Built-in work nook", "Custom", "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=900&q=80", "A compact work zone with shelving and task lighting adds function without taking over the room.", ["Shelf install", "Task lighting", "Outlet planning"], ["office", "built-in", "lighting", "shelving"]],
+  ["white-kitchen-run", "Kitchen", "Clean galley kitchen", "Minimal", "https://images.unsplash.com/photo-1560184897-ae75f418493e?auto=format&fit=crop&w=900&q=80", "Simple cabinetry, bright counters, and an efficient layout make a narrow kitchen feel larger.", ["Cabinet update", "Counter refresh", "Lighting check"], ["kitchen", "cabinet", "counter", "lighting"]],
+  ["open-living-glass", "Living Room", "Airy living space", "Modern", "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2e?auto=format&fit=crop&w=900&q=80", "Large windows, clean seating, and balanced lighting keep the room open and usable.", ["Window trim", "Paint", "Lighting"], ["living", "windows", "paint", "lighting"]],
+  ["cozy-bedroom-layers", "Bedroom", "Layered bedroom refresh", "Cozy", "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80", "Soft layers, warm lamps, and a calm wall color make the bedroom feel finished.", ["Paint", "Sconce install", "Trim repair"], ["bedroom", "paint", "lighting", "cozy"]],
+  ["exterior-black-house", "Entryway", "High-contrast exterior", "Statement", "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=900&q=80", "Dark siding, simple trim, and crisp landscaping create strong curb appeal.", ["Exterior paint", "Trim repair", "Landscape edging"], ["entry", "exterior", "paint", "landscaping"]],
+  ["pool-yard-lounge", "Backyard", "Pool lounge corner", "Resort", "https://images.unsplash.com/photo-1600607688969-a5bfcd646154?auto=format&fit=crop&w=900&q=80", "Clean pool edging and comfortable seating turn the backyard into a resort-style zone.", ["Pool deck repair", "Drainage review", "Landscape lighting"], ["backyard", "pool", "deck", "lighting"]],
+  ["modern-stair-hall", "Entryway", "Statement stair hall", "Architectural", "https://images.unsplash.com/photo-1600566753376-12c8ab7fb75b?auto=format&fit=crop&w=900&q=80", "Updated railing, wall finish, and lighting make a transition space feel designed.", ["Railing update", "Wall repair", "Lighting"], ["entry", "stairs", "railing", "lighting"]],
+  ["warm-living-sectional", "Living Room", "Warm sectional layout", "Comfort", "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=900&q=80", "A grounded seating layout, warm materials, and hidden storage make the room easier to live in.", ["Furniture layout", "Built-in storage", "Paint"], ["living", "storage", "paint", "layout"]],
+  ["simple-dining-light", "Kitchen", "Dining light upgrade", "Polished", "https://images.unsplash.com/photo-1600210491369-e753d80a41f3?auto=format&fit=crop&w=900&q=80", "A strong fixture over the table can make a simple dining area feel intentional.", ["Fixture install", "Dimmer switch", "Ceiling patch"], ["kitchen", "dining", "lighting", "electrical"]],
+  ["clean-bath-window", "Bathroom", "Bright bath corner", "Clean", "https://images.unsplash.com/photo-1600566752355-35792bedcfea?auto=format&fit=crop&w=900&q=80", "Natural light, clean tile, and simple fixtures make the bath feel calm.", ["Tile touch-up", "Fixture replacement", "Paint"], ["bathroom", "tile", "fixture", "paint"]],
+  ["calm-reading-room", "Living Room", "Quiet reading room", "Soft", "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=900&q=80", "Shelves, a focused lamp, and soft wall color turn an extra space into a reading room.", ["Shelving", "Sconce wiring", "Paint"], ["living", "reading", "shelves", "lighting"]],
+  ["closet-storage-wall", "Bedroom", "Storage wall closet", "Organized", "https://images.unsplash.com/photo-1617104678098-de229db51175?auto=format&fit=crop&w=900&q=80", "Built-in closet storage makes daily routines easier and keeps the room calmer.", ["Closet system", "Lighting", "Drawer install"], ["bedroom", "closet", "storage", "lighting"]],
+  ["outdoor-table-patio", "Backyard", "Outdoor dining pad", "Outdoor", "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&w=900&q=80", "A dining pad, shade, and lights create an outdoor room for meals and guests.", ["Paver base", "Shade structure", "Exterior lighting"], ["backyard", "patio", "dining", "lighting"]],
+  ["cabinet-hardware-detail", "Kitchen", "Cabinet hardware refresh", "Quick Win", "https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=900&q=80", "Hardware, paint, and backsplash details can update a kitchen without a full remodel.", ["Hardware swap", "Cabinet paint", "Backsplash repair"], ["kitchen", "hardware", "paint", "backsplash"]],
+  ["spa-vanity-bath", "Bathroom", "Hotel vanity setup", "Elegant", "https://images.unsplash.com/photo-1620626011761-996317b8d101?auto=format&fit=crop&w=900&q=80", "A clean vanity, better mirror lighting, and storage make the bath more useful.", ["Vanity install", "Mirror lighting", "Plumbing connection"], ["bathroom", "vanity", "lighting", "plumbing"]],
+  ["garden-walkway", "Backyard", "Garden walkway", "Garden", "https://images.unsplash.com/photo-1598902108854-10e335adac99?auto=format&fit=crop&w=900&q=80", "A defined path, planting beds, and edging make the yard feel ordered.", ["Path install", "Bed edging", "Irrigation"], ["backyard", "garden", "path", "landscaping"]],
+  ["laundry-task-zone", "Laundry", "Task-focused laundry", "Utility", "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?auto=format&fit=crop&w=900&q=80", "Counter space, cabinets, and better light make laundry easier to manage.", ["Countertop", "Cabinet mounting", "Task lighting"], ["laundry", "cabinet", "counter", "lighting"]],
+  ["pattern-floor-entry", "Entryway", "Graphic entry floor", "Statement", "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=900&q=80", "Pattern tile creates a durable and memorable first step into the home.", ["Floor tile", "Baseboard repair", "Transition strip"], ["entry", "tile", "flooring", "foyer"]],
+  ["dark-modern-kitchen", "Kitchen", "Dark modern kitchen", "Contrast", "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=900&q=80", "Deep cabinets and light surfaces create a sharp kitchen that still feels practical.", ["Cabinet painting", "Countertop update", "Lighting"], ["kitchen", "cabinet", "modern", "lighting"]],
+  ["glass-shower-bath", "Bathroom", "Glass shower refresh", "Clean", "https://images.unsplash.com/photo-1604709177225-055f99402ea3?auto=format&fit=crop&w=900&q=80", "Glass, niches, and simple tile can make a shower feel larger.", ["Glass enclosure", "Tile niche", "Fixture install"], ["bathroom", "shower", "glass", "tile"]],
+  ["living-accent-panel", "Living Room", "Textured accent wall", "Custom", "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=900&q=80", "Paneling adds structure behind a sofa, TV, or fireplace without a full renovation.", ["Trim carpentry", "Caulk", "Paint"], ["living", "paneling", "trim", "paint"]],
+  ["small-bath-vanity", "Bathroom", "Small bath storage", "Small Space", "https://images.unsplash.com/photo-1595514535415-dae8970c520f?auto=format&fit=crop&w=900&q=80", "A compact vanity and brighter mirror make a small bathroom feel less crowded.", ["Vanity install", "Mirror wiring", "Plumbing"], ["bathroom", "small", "vanity", "mirror"]],
+  ["open-shelf-kitchen", "Kitchen", "Open kitchen shelf", "Light", "https://images.unsplash.com/photo-1565538810643-b5bdb714032a?auto=format&fit=crop&w=900&q=80", "Open shelving, tile, and lighting make everyday items part of the design.", ["Shelf mounting", "Backsplash tile", "Wall repair"], ["kitchen", "shelving", "tile", "backsplash"]],
+];
+
+const EXTRA_INSPIRATION_IDEAS = EXTRA_IMAGE_IDEAS.map(([id, area, title, style, image, description, projectNotes, tags], index) => ({
+    area,
+    id,
+    title,
+    style,
+    image,
+    description,
+    projectNotes,
+    tags,
+    demo: true,
+    sortWeight: index,
+  }));
+
 export default function CustomerInspiration() {
   const [search, setSearch] = useState("");
   const [activeArea, setActiveArea] = useState(AREAS[0]);
+  const [activeBoard, setActiveBoard] = useState(BOARDS[0]);
   const [selectedIdea, setSelectedIdea] = useState(null);
+  const [savedIdeaIDs, setSavedIdeaIDs] = useState([]);
+  const [customIdeas, setCustomIdeas] = useState([]);
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [newIdea, setNewIdea] = useState({
+    title: "",
+    area: "Kitchen",
+    image: "",
+    description: "",
+    tags: "",
+  });
   const { width } = useWindowDimensions();
-  const isWide = width >= 720;
+  const columnCount = width >= 1040 ? 4 : width >= 720 ? 3 : 2;
+  const allIdeas = useMemo(() => [...customIdeas, ...INSPIRATION_IDEAS, ...EXTRA_INSPIRATION_IDEAS], [customIdeas]);
+
+  useEffect(() => {
+    loadSavedIdeas();
+    loadCustomIdeas();
+  }, []);
+
+  const loadSavedIdeas = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(SAVED_IDEAS_KEY);
+      setSavedIdeaIDs(stored ? JSON.parse(stored) : []);
+    } catch (error) {
+      console.log("Saved inspiration load error:", error);
+    }
+  };
+
+  const loadCustomIdeas = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(CUSTOM_IDEAS_KEY);
+      setCustomIdeas(stored ? JSON.parse(stored) : []);
+    } catch (error) {
+      console.log("Custom inspiration load error:", error);
+    }
+  };
+
+  const toggleSavedIdea = async (ideaID) => {
+    const nextIDs = savedIdeaIDs.includes(ideaID)
+      ? savedIdeaIDs.filter((id) => id !== ideaID)
+      : [ideaID, ...savedIdeaIDs];
+
+    setSavedIdeaIDs(nextIDs);
+    try {
+      await AsyncStorage.setItem(SAVED_IDEAS_KEY, JSON.stringify(nextIDs));
+    } catch (error) {
+      console.log("Saved inspiration update error:", error);
+    }
+  };
+
+  const saveCustomIdea = async () => {
+    const title = newIdea.title.trim();
+    const image = newIdea.image.trim();
+    const description = newIdea.description.trim();
+
+    if (!title || !image) return;
+
+    const tags = newIdea.tags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+
+    const idea = {
+      id: `custom-${Date.now()}`,
+      area: newIdea.area,
+      title,
+      style: "Saved idea",
+      image,
+      description: description || "Customer-added inspiration idea.",
+      projectNotes: ["Review scope", "Match with a qualified contractor", "Turn into a planner item"],
+      tags: tags.length ? tags : [newIdea.area.toLowerCase()],
+      custom: true,
+    };
+
+    const nextIdeas = [idea, ...customIdeas];
+    setCustomIdeas(nextIdeas);
+    setSavedIdeaIDs((current) => (current.includes(idea.id) ? current : [idea.id, ...current]));
+    setNewIdea({ title: "", area: "Kitchen", image: "", description: "", tags: "" });
+    setAddModalVisible(false);
+
+    try {
+      await Promise.all([
+        AsyncStorage.setItem(CUSTOM_IDEAS_KEY, JSON.stringify(nextIdeas)),
+        AsyncStorage.setItem(SAVED_IDEAS_KEY, JSON.stringify([idea.id, ...savedIdeaIDs.filter((id) => id !== idea.id)])),
+      ]);
+    } catch (error) {
+      console.log("Custom inspiration save error:", error);
+    }
+  };
 
   const filteredIdeas = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return INSPIRATION_IDEAS.filter((idea) => {
+    return allIdeas.filter((idea) => {
       const haystack = [idea.area, idea.title, idea.style, idea.description, ...idea.tags].join(" ").toLowerCase();
       const matchesArea = activeArea.label === "All" || idea.area === activeArea.label;
+      const matchesBoard =
+        activeBoard.type === "all" ||
+        (activeBoard.type === "saved" && savedIdeaIDs.includes(idea.id)) ||
+        (activeBoard.type === "keyword" && activeBoard.keywords.some((keyword) => haystack.includes(keyword)));
       const matchesQuery = !query || haystack.includes(query);
-      return matchesArea && matchesQuery;
+      return matchesArea && matchesBoard && matchesQuery;
     });
-  }, [activeArea, search]);
+  }, [activeArea, activeBoard, allIdeas, savedIdeaIDs, search]);
+
+  const ideaColumns = useMemo(() => {
+    return filteredIdeas.reduce(
+      (columns, idea, index) => {
+        columns[index % columnCount].push({ ...idea, displayIndex: index });
+        return columns;
+      },
+      Array.from({ length: columnCount }, () => [])
+    );
+  }, [columnCount, filteredIdeas]);
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.titleText}>Inspiration</Text>
-        <Text style={styles.subtitle}>Search rooms, styles, and project details before you start planning.</Text>
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerCopy}>
+            <Text style={styles.eyebrow}>Fixie Ideas</Text>
+            <Text style={styles.titleText}>Find your next project</Text>
+          </View>
+          <TouchableOpacity style={styles.addIdeaButton} onPress={() => setAddModalVisible(true)} activeOpacity={0.8}>
+            <Ionicons name="add" size={18} color={fixieColors.background} />
+            <Text style={styles.addIdeaText}>Add</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.subtitle}>Save room ideas, explore project details, and turn inspiration into a contractor-ready plan.</Text>
       </View>
 
       <View style={styles.searchWrap}>
@@ -371,6 +534,23 @@ export default function CustomerInspiration() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.boardScroller}>
+          {BOARDS.map((board) => {
+            const active = activeBoard.label === board.label;
+            return (
+              <TouchableOpacity
+                key={board.label}
+                style={[styles.boardButton, active && styles.boardButtonActive]}
+                onPress={() => setActiveBoard(board)}
+                activeOpacity={0.78}
+              >
+                <Ionicons name={board.icon} size={17} color={active ? fixieColors.background : fixieColors.goldLight} />
+                <Text style={[styles.boardLabel, active && styles.boardLabelActive]}>{board.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.areaScroller}>
           {AREAS.map((area) => {
             const active = activeArea.label === area.label;
@@ -389,28 +569,41 @@ export default function CustomerInspiration() {
         </ScrollView>
 
         <View style={styles.resultsHeader}>
-          <Text style={styles.sectionTitle}>Image Results</Text>
-          <Text style={styles.resultsMeta}>{filteredIdeas.length} photos</Text>
+          <Text style={styles.sectionTitle}>{activeBoard.label === "All Ideas" ? "For You" : activeBoard.label}</Text>
+          <Text style={styles.resultsMeta}>{filteredIdeas.length} pins</Text>
         </View>
 
-        <View style={styles.grid}>
-          {filteredIdeas.map((idea, index) => (
-            <TouchableOpacity
-              key={idea.id}
-              style={[
-                styles.ideaCard,
-                isWide && styles.ideaCardWide,
-                { height: getTileHeight(index, isWide) },
-              ]}
-              onPress={() => setSelectedIdea(idea)}
-              activeOpacity={0.82}
-            >
-              <Image source={{ uri: idea.image }} style={styles.ideaImage} />
-              <View style={styles.imageOverlay}>
-                <Text style={styles.areaTag}>{idea.area}</Text>
-                <Text style={styles.ideaTitle} numberOfLines={2}>{idea.title}</Text>
-              </View>
-            </TouchableOpacity>
+        <View style={styles.masonryGrid}>
+          {ideaColumns.map((column, columnIndex) => (
+            <View key={`column-${columnIndex}`} style={styles.masonryColumn}>
+              {column.map((idea) => {
+                const saved = savedIdeaIDs.includes(idea.id);
+                return (
+                  <TouchableOpacity
+                    key={idea.id}
+                    style={[styles.ideaCard, { height: getTileHeight(idea.displayIndex, columnCount) }]}
+                    onPress={() => setSelectedIdea(idea)}
+                    activeOpacity={0.86}
+                  >
+                    <Image source={{ uri: idea.image }} style={styles.ideaImage} />
+                    <TouchableOpacity
+                      style={[styles.cardSaveButton, saved && styles.cardSaveButtonActive]}
+                      onPress={(event) => {
+                        event.stopPropagation();
+                        toggleSavedIdea(idea.id);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name={saved ? "heart" : "heart-outline"} size={17} color={saved ? fixieColors.background : fixieColors.text} />
+                    </TouchableOpacity>
+                    <View style={styles.imageOverlay}>
+                      <Text style={styles.areaTag}>{idea.area}</Text>
+                      <Text style={styles.ideaTitle} numberOfLines={2}>{idea.title}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           ))}
         </View>
 
@@ -435,8 +628,25 @@ export default function CustomerInspiration() {
                   <Ionicons name="close" size={20} color={fixieColors.text} />
                 </TouchableOpacity>
                 <ScrollView showsVerticalScrollIndicator={false}>
-                  <Text style={styles.modalArea}>{selectedIdea.area}</Text>
-                  <Text style={styles.modalTitle}>{selectedIdea.title}</Text>
+                  <View style={styles.modalTitleRow}>
+                    <View style={styles.modalTitleCopy}>
+                      <Text style={styles.modalArea}>{selectedIdea.area}</Text>
+                      <Text style={styles.modalTitle}>{selectedIdea.title}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.modalSaveButton, savedIdeaIDs.includes(selectedIdea.id) && styles.modalSaveButtonActive]}
+                      onPress={() => toggleSavedIdea(selectedIdea.id)}
+                    >
+                      <Ionicons
+                        name={savedIdeaIDs.includes(selectedIdea.id) ? "heart" : "heart-outline"}
+                        size={18}
+                        color={savedIdeaIDs.includes(selectedIdea.id) ? fixieColors.background : fixieColors.goldLight}
+                      />
+                      <Text style={[styles.modalSaveText, savedIdeaIDs.includes(selectedIdea.id) && styles.modalSaveTextActive]}>
+                        {savedIdeaIDs.includes(selectedIdea.id) ? "Saved" : "Save"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.modalDescription}>{selectedIdea.description}</Text>
 
                   <Text style={styles.modalSectionTitle}>Project notes</Text>
@@ -465,12 +675,84 @@ export default function CustomerInspiration() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={addModalVisible} transparent animationType="slide" onRequestClose={() => setAddModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.addModalCard}>
+            <View style={styles.addModalHeader}>
+              <View>
+                <Text style={styles.modalArea}>Add Inspiration</Text>
+                <Text style={styles.addModalTitle}>Create a new idea</Text>
+              </View>
+              <TouchableOpacity style={styles.modalCloseInline} onPress={() => setAddModalVisible(false)}>
+                <Ionicons name="close" size={20} color={fixieColors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.formInput}
+              placeholder="Idea title"
+              placeholderTextColor={fixieColors.textMuted}
+              value={newIdea.title}
+              onChangeText={(title) => setNewIdea((current) => ({ ...current, title }))}
+            />
+            <TextInput
+              style={styles.formInput}
+              placeholder="Image URL"
+              placeholderTextColor={fixieColors.textMuted}
+              value={newIdea.image}
+              onChangeText={(image) => setNewIdea((current) => ({ ...current, image }))}
+              autoCapitalize="none"
+            />
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.formAreaScroller}>
+              {AREAS.filter((area) => area.label !== "All").map((area) => {
+                const active = newIdea.area === area.label;
+                return (
+                  <TouchableOpacity
+                    key={area.label}
+                    style={[styles.formAreaButton, active && styles.formAreaButtonActive]}
+                    onPress={() => setNewIdea((current) => ({ ...current, area: area.label }))}
+                  >
+                    <Text style={[styles.formAreaText, active && styles.formAreaTextActive]}>{area.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TextInput
+              style={[styles.formInput, styles.formTextArea]}
+              placeholder="Description or notes"
+              placeholderTextColor={fixieColors.textMuted}
+              value={newIdea.description}
+              onChangeText={(description) => setNewIdea((current) => ({ ...current, description }))}
+              multiline
+            />
+            <TextInput
+              style={styles.formInput}
+              placeholder="Tags, separated by commas"
+              placeholderTextColor={fixieColors.textMuted}
+              value={newIdea.tags}
+              onChangeText={(tags) => setNewIdea((current) => ({ ...current, tags }))}
+            />
+
+            <TouchableOpacity
+              style={[styles.planButton, (!newIdea.title.trim() || !newIdea.image.trim()) && styles.disabledButton]}
+              onPress={saveCustomIdea}
+              disabled={!newIdea.title.trim() || !newIdea.image.trim()}
+            >
+              <Ionicons name="images-outline" size={18} color={fixieColors.background} />
+              <Text style={styles.planButtonText}>Save Idea</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-function getTileHeight(index, isWide) {
-  const heights = isWide ? [190, 250, 220, 280, 205, 240] : [190, 240, 210, 265, 220];
+function getTileHeight(index, columnCount) {
+  const heights = columnCount >= 3 ? [190, 250, 220, 280, 205, 240] : [190, 240, 210, 265, 220];
   return heights[index % heights.length];
 }
 
@@ -484,7 +766,41 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 12,
   },
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 14,
+  },
+  headerCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  addIdeaButton: {
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    backgroundColor: fixieColors.gold,
+    ...fixieShadows.glow,
+  },
+  addIdeaText: {
+    color: fixieColors.background,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  eyebrow: {
+    color: fixieColors.goldLight,
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
   titleText: {
+    marginTop: 5,
     fontSize: 28,
     fontWeight: "800",
     color: fixieColors.text,
@@ -524,6 +840,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 4,
     paddingBottom: 120,
+  },
+  boardScroller: {
+    gap: 10,
+    paddingRight: 20,
+    marginBottom: 12,
+  },
+  boardButton: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    backgroundColor: fixieColors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: fixieColors.border,
+  },
+  boardButtonActive: {
+    backgroundColor: fixieColors.gold,
+    borderColor: fixieColors.goldLight,
+    ...fixieShadows.glow,
+  },
+  boardLabel: {
+    color: fixieColors.textSecondary,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  boardLabelActive: {
+    color: fixieColors.background,
   },
   areaScroller: {
     gap: 10,
@@ -570,22 +915,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
-  grid: {
+  masonryGrid: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+  masonryColumn: {
+    flex: 1,
     gap: 12,
   },
   ideaCard: {
-    width: "48%",
+    width: "100%",
     overflow: "hidden",
     backgroundColor: fixieColors.surfaceElevated,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: fixieColors.border,
     ...fixieShadows.card,
-  },
-  ideaCardWide: {
-    width: "31.6%",
   },
   ideaImage: {
     width: "100%",
@@ -599,6 +945,24 @@ const styles = StyleSheet.create({
     bottom: 0,
     padding: 10,
     backgroundColor: "rgba(12, 12, 13, 0.58)",
+  },
+  cardSaveButton: {
+    position: "absolute",
+    top: 9,
+    right: 9,
+    zIndex: 2,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.28)",
+  },
+  cardSaveButtonActive: {
+    backgroundColor: fixieColors.gold,
+    borderColor: fixieColors.goldLight,
   },
   areaTag: {
     color: fixieColors.goldLight,
@@ -655,6 +1019,84 @@ const styles = StyleSheet.create({
     borderColor: fixieColors.border,
     ...fixieShadows.card,
   },
+  addModalCard: {
+    width: "100%",
+    maxWidth: 560,
+    maxHeight: "88%",
+    backgroundColor: fixieColors.surface,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: fixieColors.border,
+    padding: 18,
+    ...fixieShadows.card,
+  },
+  addModalHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 14,
+  },
+  addModalTitle: {
+    marginTop: 5,
+    color: fixieColors.text,
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  modalCloseInline: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: fixieColors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: fixieColors.border,
+  },
+  formInput: {
+    width: "100%",
+    backgroundColor: fixieColors.backgroundAlt,
+    borderWidth: 1,
+    borderColor: fixieColors.border,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    color: fixieColors.text,
+    fontSize: 15,
+    marginBottom: 12,
+  },
+  formTextArea: {
+    minHeight: 96,
+    textAlignVertical: "top",
+  },
+  formAreaScroller: {
+    gap: 8,
+    paddingRight: 12,
+    marginBottom: 12,
+  },
+  formAreaButton: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: fixieColors.backgroundAlt,
+    borderWidth: 1,
+    borderColor: fixieColors.border,
+  },
+  formAreaButtonActive: {
+    backgroundColor: fixieColors.gold,
+    borderColor: fixieColors.goldLight,
+  },
+  formAreaText: {
+    color: fixieColors.textSecondary,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  formAreaTextActive: {
+    color: fixieColors.background,
+  },
+  disabledButton: {
+    opacity: 0.48,
+  },
   modalImage: {
     width: "100%",
     height: 250,
@@ -674,9 +1116,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: fixieColors.border,
   },
-  modalArea: {
-    marginTop: 18,
+  modalTitleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
     marginHorizontal: 18,
+    marginTop: 18,
+  },
+  modalTitleCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  modalArea: {
     color: fixieColors.goldLight,
     fontSize: 12,
     fontWeight: "800",
@@ -684,10 +1136,32 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     marginTop: 6,
-    marginHorizontal: 18,
     color: fixieColors.text,
     fontSize: 24,
     fontWeight: "800",
+  },
+  modalSaveButton: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    backgroundColor: fixieColors.backgroundAlt,
+    borderWidth: 1,
+    borderColor: fixieColors.border,
+  },
+  modalSaveButtonActive: {
+    backgroundColor: fixieColors.gold,
+    borderColor: fixieColors.goldLight,
+  },
+  modalSaveText: {
+    color: fixieColors.goldLight,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  modalSaveTextActive: {
+    color: fixieColors.background,
   },
   modalDescription: {
     marginTop: 10,
