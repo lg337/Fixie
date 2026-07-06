@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -17,6 +17,7 @@ import {
 import FixieLogo from "../../components/FixieLogo";
 import RequestModal from "../../components/request";
 import { fixieColors, fixieShadows } from "../../lib/fixie-theme";
+import { loadSavedCompanyIDs, toggleSavedCompany } from "../../lib/saved-companies";
 import { supabase } from "../../lib/supabase";
 import CustomerBottomNav from "./components/CustomerBottomNav";
 
@@ -49,10 +50,23 @@ export default function CustomerHome() {
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviews, setReviews] = useState([]);
   const [avgRating, setAvgRating] = useState("0.0");
+  const [savedCompanyIDs, setSavedCompanyIDs] = useState([]);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  const refreshSavedCompanies = useCallback(async () => {
+    const storedID = customerID || (await AsyncStorage.getItem("customerID"));
+    if (!storedID) return;
+    setSavedCompanyIDs(await loadSavedCompanyIDs(storedID));
+  }, [customerID]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshSavedCompanies();
+    }, [refreshSavedCompanies])
+  );
 
   useEffect(() => {
     const query = search.trim().toLowerCase();
@@ -80,6 +94,7 @@ export default function CustomerHome() {
 
       if (storedID === "guest") {
         setCustomerID("guest");
+        setSavedCompanyIDs(await loadSavedCompanyIDs("guest"));
         setCustomerData({ CustomerName: "Guest", CustomerUsername: "guest" });
         const { data, error } = await supabase
           .from("CompanyTable")
@@ -91,6 +106,7 @@ export default function CustomerHome() {
       } else {
         const parsedID = Number(storedID);
         setCustomerID(parsedID);
+        setSavedCompanyIDs(await loadSavedCompanyIDs(parsedID));
         const [customerResult, companyResult] = await Promise.all([
           supabase
             .from("CustomerTable")
@@ -123,6 +139,12 @@ export default function CustomerHome() {
     setSelectedCompany(companyID);
     setModalMode("request");
     setModalVisible(true);
+  };
+
+  const handleToggleSaved = async (companyID) => {
+    const storedID = customerID || (await AsyncStorage.getItem("customerID"));
+    if (!storedID) return;
+    setSavedCompanyIDs(await toggleSavedCompany(storedID, companyID));
   };
 
   const openReviews = async (company) => {
@@ -243,40 +265,52 @@ export default function CustomerHome() {
         </View>
 
         <View style={styles.cardsRow}>
-          {filtered.map((company) => (
-            <TouchableOpacity key={company.CompanyID} style={styles.card} onPress={() => router.push({ pathname: "/customer/companyprofile", params: { id: company.CompanyID } })} activeOpacity={0.7}>
-              {company.ProfileImageUrl ? (
-                <Image source={{ uri: company.ProfileImageUrl }} style={styles.image} />
-              ) : (
-                <View style={styles.imagePlaceholder}>
-                  <Text style={styles.placeholderText}>{company.CompanyName?.[0] ?? "?"}</Text>
+          {filtered.map((company) => {
+            const isSaved = savedCompanyIDs.includes(Number(company.CompanyID));
+
+            return (
+              <TouchableOpacity key={company.CompanyID} style={styles.card} onPress={() => router.push({ pathname: "/customer/companyprofile", params: { id: company.CompanyID } })} activeOpacity={0.7}>
+                <TouchableOpacity
+                  style={[styles.saveButton, isSaved && styles.saveButtonActive]}
+                  onPress={(e) => { e.stopPropagation(); handleToggleSaved(company.CompanyID); }}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name={isSaved ? "heart" : "heart-outline"} size={18} color={isSaved ? fixieColors.background : fixieColors.goldLight} />
+                </TouchableOpacity>
+
+                {company.ProfileImageUrl ? (
+                  <Image source={{ uri: company.ProfileImageUrl }} style={styles.image} />
+                ) : (
+                  <View style={styles.imagePlaceholder}>
+                    <Text style={styles.placeholderText}>{company.CompanyName?.[0] ?? "?"}</Text>
+                  </View>
+                )}
+                <Text style={styles.imageText} numberOfLines={1}>
+                  {company.CompanyName}
+                </Text>
+                <Text style={styles.descriptionText} numberOfLines={2}>
+                  {company.CompanyField || "General services"}
+                </Text>
+
+                <View style={styles.cardActionsContainer}>
+                  <TouchableOpacity
+                    style={styles.cardAction}
+                    onPress={(e) => { e.stopPropagation(); openRequest(company.CompanyID); }}
+                  >
+                    <Text style={styles.cardActionText}>Request</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.cardAction, styles.reviewAction]}
+                    onPress={(e) => { e.stopPropagation(); openReviews(company); }}
+                  >
+                    <Ionicons name="star" size={12} color={fixieColors.goldLight} />
+                    <Text style={styles.cardActionText}>Reviews</Text>
+                  </TouchableOpacity>
                 </View>
-              )}
-              <Text style={styles.imageText} numberOfLines={1}>
-                {company.CompanyName}
-              </Text>
-              <Text style={styles.descriptionText} numberOfLines={2}>
-                {company.CompanyField || "General services"}
-              </Text>
-
-              <View style={styles.cardActionsContainer}>
-                <TouchableOpacity
-                  style={styles.cardAction}
-                  onPress={(e) => { e.stopPropagation(); openRequest(company.CompanyID); }}
-                >
-                  <Text style={styles.cardActionText}>Request</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.cardAction, styles.reviewAction]}
-                  onPress={(e) => { e.stopPropagation(); openReviews(company); }}
-                >
-                  <Ionicons name="star" size={12} color={fixieColors.goldLight} />
-                  <Text style={styles.cardActionText}>Reviews</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            );
+          })}
           {filtered.length === 0 && (
             <View style={styles.emptyState}>
               <Ionicons name="search-outline" size={28} color={fixieColors.goldLight} />
@@ -537,7 +571,26 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: fixieColors.border,
+    position: "relative",
     ...fixieShadows.card,
+  },
+  saveButton: {
+    position: "absolute",
+    top: 22,
+    right: 22,
+    zIndex: 2,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(28, 28, 30, 0.82)",
+    borderWidth: 1,
+    borderColor: fixieColors.border,
+  },
+  saveButtonActive: {
+    backgroundColor: fixieColors.gold,
+    borderColor: fixieColors.goldLight,
   },
   image: {
     width: "100%",

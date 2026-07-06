@@ -13,23 +13,17 @@ import {
 } from "react-native";
 import RequestModal from "../../components/request";
 import { fixieColors, fixieShadows, fixieStatusColors } from "../../lib/fixie-theme";
+import {
+  PROJECT_TRACKER_STAGES,
+  getTrackerProgress,
+  getTrackerPriority,
+  getTrackerStage,
+  getTrackerStageIndex,
+  isCompletedRequestStatus,
+} from "../../lib/project-tracker";
 import { subscribeToRequestChanges } from "../../lib/request-updates";
 import { supabase } from "../../lib/supabase";
 import CustomerBottomNav from "./components/CustomerBottomNav";
-
-const STATUS_LABELS = {
-  new: "New",
-  pending: "Pending",
-  in_progress: "In Progress",
-  completed: "Completed",
-};
-
-const STATUS_PRIORITY = {
-  new: 0,
-  pending: 1,
-  in_progress: 2,
-  completed: 3,
-};
 
 export default function CustomerRequests() {
   const [loading, setLoading] = useState(true);
@@ -85,7 +79,7 @@ export default function CustomerRequests() {
       const reviewData = reviewResult.data;
 
       const sortedRequests = [...(requestData || [])].sort((a, b) => {
-        const statusDiff = (STATUS_PRIORITY[a.RequestStatus] ?? 99) - (STATUS_PRIORITY[b.RequestStatus] ?? 99);
+        const statusDiff = getTrackerPriority(a.RequestStatus) - getTrackerPriority(b.RequestStatus);
         if (statusDiff !== 0) return statusDiff;
         return Number(b.RequestID || 0) - Number(a.RequestID || 0);
       });
@@ -133,7 +127,10 @@ export default function CustomerRequests() {
   };
 
   const renderRequest = ({ item }) => {
-    const statusColor = fixieStatusColors[item.RequestStatus] || fixieColors.info;
+    const trackerStage = getTrackerStage(item.RequestStatus);
+    const activeIndex = getTrackerStageIndex(item.RequestStatus);
+    const progress = getTrackerProgress(item.RequestStatus);
+    const statusColor = fixieStatusColors[item.RequestStatus] || fixieColors.gold;
     const hasReview = !!reviewedCompanies[item.CompanyID];
 
     return (
@@ -144,14 +141,41 @@ export default function CustomerRequests() {
             <Text style={styles.company}>{item.CompanyTable?.CompanyName || "Unknown Company"}</Text>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.statusText}>{STATUS_LABELS[item.RequestStatus] || "Open"}</Text>
+            <Text style={styles.statusText}>{trackerStage.label}</Text>
           </View>
         </View>
 
         <Text style={styles.description}>{item.RequestNotes || "No request details were provided."}</Text>
+        <View style={styles.trackerPanel}>
+          <View style={styles.progressHeader}>
+            <View>
+              <Text style={styles.progressLabel}>Project tracker</Text>
+              <Text style={styles.progressStage}>{progress}% complete</Text>
+            </View>
+            <Text style={styles.scheduleText}>{trackerStage.schedule}</Text>
+          </View>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${progress}%` }]} />
+          </View>
+          <View style={styles.stageRow}>
+            {PROJECT_TRACKER_STAGES.map((stage, index) => {
+              const reached = index <= activeIndex;
+              return (
+                <View key={stage.key} style={styles.stageItem}>
+                  <View style={[styles.stageDot, reached && styles.stageDotActive]}>
+                    {reached ? <Text style={styles.stageDotText}>{index + 1}</Text> : null}
+                  </View>
+                  <Text style={[styles.stageText, reached && styles.stageTextActive]} numberOfLines={2}>
+                    {stage.shortLabel}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
         <Text style={styles.meta}>Request #{item.RequestID}</Text>
 
-        {item.RequestStatus === "completed" && (
+        {isCompletedRequestStatus(item.RequestStatus) && (
           <TouchableOpacity
             style={[styles.reviewButton, hasReview && styles.reviewedButton]}
             onPress={() => {
@@ -295,6 +319,92 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 12,
     color: fixieColors.textMuted,
+  },
+  trackerPanel: {
+    marginTop: 14,
+    backgroundColor: fixieColors.backgroundAlt,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: fixieColors.border,
+    padding: 14,
+  },
+  progressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  progressLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: fixieColors.goldLight,
+    textTransform: "uppercase",
+  },
+  progressStage: {
+    marginTop: 4,
+    fontSize: 18,
+    fontWeight: "800",
+    color: fixieColors.text,
+  },
+  scheduleText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: fixieColors.textSecondary,
+    textAlign: "right",
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: fixieColors.surfaceElevated,
+    overflow: "hidden",
+    marginTop: 14,
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: fixieColors.gold,
+  },
+  stageRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 6,
+    marginTop: 14,
+  },
+  stageItem: {
+    flex: 1,
+    alignItems: "center",
+    minWidth: 0,
+  },
+  stageDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: fixieColors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: fixieColors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stageDotActive: {
+    backgroundColor: fixieColors.gold,
+    borderColor: fixieColors.goldLight,
+  },
+  stageDotText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: fixieColors.background,
+  },
+  stageText: {
+    marginTop: 6,
+    fontSize: 10,
+    lineHeight: 13,
+    color: fixieColors.textMuted,
+    textAlign: "center",
+  },
+  stageTextActive: {
+    color: fixieColors.text,
+    fontWeight: "800",
   },
   reviewButton: {
     marginTop: 14,

@@ -1,15 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Modal,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { formatPlannerItemForRequest, loadCustomerPlannerItems } from "../lib/customer-planner";
 import { fixieColors, fixieShadows } from "../lib/fixie-theme";
 import { notifyRequestsChanged } from "../lib/request-updates";
 import { supabase } from "../lib/supabase";
@@ -18,16 +20,48 @@ export default function RequestModal({ visible, onClose, companyID, customerID, 
   const [notes, setNotes] = useState("");
   const [stars, setStars] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [plannerItems, setPlannerItems] = useState([]);
+  const [includedPlannerKeys, setIncludedPlannerKeys] = useState([]);
 
   const isReviewMode = mode === "review";
+
+  useEffect(() => {
+    const loadPlannerItems = async () => {
+      if (!visible || isReviewMode || !customerID) {
+        setPlannerItems([]);
+        return;
+      }
+
+      setPlannerItems(await loadCustomerPlannerItems(customerID));
+    };
+
+    loadPlannerItems();
+  }, [customerID, isReviewMode, visible]);
 
   const resetForm = () => {
     setNotes("");
     setStars(0);
+    setIncludedPlannerKeys([]);
+  };
+
+  const togglePlannerItem = (item) => {
+    const isIncluded = includedPlannerKeys.includes(item.key);
+    setIncludedPlannerKeys((currentKeys) =>
+      isIncluded ? currentKeys.filter((key) => key !== item.key) : [...currentKeys, item.key]
+    );
+  };
+
+  const getRequestNotes = () => {
+    const selectedItems = plannerItems.filter((item) => includedPlannerKeys.includes(item.key));
+    const plannerText = selectedItems.map(formatPlannerItemForRequest).join("\n\n---\n\n");
+
+    return [notes.trim(), plannerText].filter(Boolean).join("\n\n---\n\n");
   };
 
   const handleSubmit = async () => {
-    if (!notes.trim()) {
+    const requestNotes = isReviewMode ? notes.trim() : getRequestNotes();
+
+    if (!requestNotes.trim()) {
       Alert.alert("Missing info", `Please provide ${isReviewMode ? "your review" : "details"}.`);
       return;
     }
@@ -46,7 +80,7 @@ export default function RequestModal({ visible, onClose, companyID, customerID, 
             CustomerID: customerID,
             CompanyID: companyID,
             Stars: stars,
-            Review: notes.trim(),
+            Review: requestNotes,
           },
           { onConflict: "CustomerID,CompanyID" }
         );
@@ -58,7 +92,7 @@ export default function RequestModal({ visible, onClose, companyID, customerID, 
         const { error } = await supabase.from("RequestTable").insert({
           CompanyID: companyID,
           CustomerID: customerID,
-          RequestNotes: notes.trim(),
+          RequestNotes: requestNotes,
           RequestStatus: "new",
         });
         if (error) throw error;
@@ -89,7 +123,7 @@ export default function RequestModal({ visible, onClose, companyID, customerID, 
           <Text style={styles.caption}>
             {isReviewMode
               ? "Keep the stars and comments, just in the new Fixie style."
-              : "Share the job details and keep the current workflow exactly the same."}
+              : "Share the job details and include any planner templates that should go with the request."}
           </Text>
 
           {isReviewMode && (
@@ -114,6 +148,39 @@ export default function RequestModal({ visible, onClose, companyID, customerID, 
             onChangeText={setNotes}
             multiline
           />
+
+          {!isReviewMode && plannerItems.length > 0 ? (
+            <View style={styles.plannerBox}>
+              <Text style={styles.plannerTitle}>Include planner templates</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.plannerScroller}>
+                {plannerItems.map((item) => {
+                  const selected = includedPlannerKeys.includes(item.key);
+
+                  return (
+                    <TouchableOpacity
+                      key={item.key}
+                      style={[styles.plannerChip, selected && styles.plannerChipSelected]}
+                      onPress={() => togglePlannerItem(item)}
+                    >
+                      <Ionicons
+                        name={selected ? "checkmark-circle" : "add-circle-outline"}
+                        size={17}
+                        color={selected ? fixieColors.background : fixieColors.goldLight}
+                      />
+                      <View style={styles.plannerChipTextWrap}>
+                        <Text style={[styles.plannerChipText, selected && styles.plannerChipTextSelected]} numberOfLines={1}>
+                          {item.label}
+                        </Text>
+                        <Text style={[styles.plannerChipMeta, selected && styles.plannerChipTextSelected]} numberOfLines={1}>
+                          {item.type}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
 
           <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading}>
             {loading ? (
@@ -161,6 +228,30 @@ const styles = StyleSheet.create({
     color: fixieColors.text,
     textAlignVertical: "top",
   },
+  plannerBox: { marginBottom: 12 },
+  plannerTitle: { color: fixieColors.text, fontSize: 13, fontWeight: "800", marginBottom: 8 },
+  plannerScroller: { gap: 8, paddingRight: 12 },
+  plannerChip: {
+    maxWidth: 180,
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: fixieColors.backgroundAlt,
+    borderWidth: 1,
+    borderColor: fixieColors.border,
+  },
+  plannerChipSelected: {
+    backgroundColor: fixieColors.gold,
+    borderColor: fixieColors.goldLight,
+  },
+  plannerChipTextWrap: { flex: 1, minWidth: 0 },
+  plannerChipText: { color: fixieColors.text, fontSize: 12, fontWeight: "800" },
+  plannerChipMeta: { color: fixieColors.textMuted, fontSize: 11, fontWeight: "700", marginTop: 2 },
+  plannerChipTextSelected: { color: fixieColors.background },
   button: {
     backgroundColor: fixieColors.gold,
     padding: 15,

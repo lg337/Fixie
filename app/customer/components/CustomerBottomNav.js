@@ -5,6 +5,9 @@ import { fixieColors, fixieShadows } from "../../../lib/fixie-theme";
 
 const NAV_ITEMS = [
   { label: "Home", icon: "home-outline", activeIcon: "home", route: "/customer/home" },
+  { label: "Ideas", icon: "images-outline", activeIcon: "images", route: "/customer/inspiration" },
+  { label: "Planner", icon: "create-outline", activeIcon: "create", route: "/customer/planner" },
+  { label: "Saved", icon: "heart-outline", activeIcon: "heart", route: "/customer/saved" },
   { label: "Requests", icon: "briefcase-outline", activeIcon: "briefcase", route: "/customer/requests" },
   { label: "Profile", icon: "person-outline", activeIcon: "person", route: "/customer/profile" },
 ];
@@ -53,15 +56,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
-    paddingVertical: 10,
-    borderRadius: 16,
+    minHeight: 58,
+    paddingVertical: 8,
+    borderRadius: 14,
   },
   buttonActive: {
     backgroundColor: fixieColors.gold,
     ...fixieShadows.glow,
   },
   label: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: "700",
     color: fixieColors.textSecondary,
   },

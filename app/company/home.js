@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import FixieLogo from "../../components/FixieLogo";
 import { fixieColors, fixieShadows, fixieStatusColors } from "../../lib/fixie-theme";
+import { COMPANY_TRACKER_OPTIONS, getTrackerStage } from "../../lib/project-tracker";
 import { supabase } from "../../lib/supabase";
 
 export default function CompanyHome() {
@@ -65,7 +66,7 @@ export default function CompanyHome() {
           .from("RequestTable")
           .select("*")
           .eq("CompanyID", parsedCompanyID)
-          .eq("RequestStatus", "in_progress")
+          .in("RequestStatus", ["pending", "in_progress", "source_parts", "labor", "final_touches"])
           .order("RequestID", { ascending: false });
 
         setNewRequests(newReqs || []);
@@ -92,20 +93,13 @@ export default function CompanyHome() {
     loadHomeData();
   };
 
-  const STATUS_OPTIONS = [
-    { key: "new", label: "New" },
-    { key: "pending", label: "Pending" },
-    { key: "in_progress", label: "In Progress" },
-    { key: "completed", label: "Completed" },
-  ];
-
   const renderRequestItem = ({ item }) => (
     <View style={styles.requestCard}>
       <Text style={styles.requestTitle}>{item.RequestTitle || item.RequestNotes || "Untitled Request"}</Text>
       <Text style={styles.requestDescription}>{item.RequestDescription || item.RequestNotes || "No description provided"}</Text>
       <View style={styles.statusRow}>
-        {STATUS_OPTIONS.map((s) => {
-          const active = item.RequestStatus === s.key;
+        {COMPANY_TRACKER_OPTIONS.map((s) => {
+          const active = getTrackerStage(item.RequestStatus).key === s.key;
           return (
             <TouchableOpacity
               key={s.key}

@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { fixieColors, fixieShadows, fixieStatusColors } from "../../../lib/fixie-theme";
+import { getTrackerStage, isActiveRequestStatus, isCompletedRequestStatus, isNewRequestStatus } from "../../../lib/project-tracker";
 import { notifyRequestsChanged, subscribeToRequestChanges } from "../../../lib/request-updates";
 import { supabase } from "../../../lib/supabase";
 
@@ -16,15 +17,18 @@ const FILTERS = [
 
 const statusConfig = {
   new: { color: fixieStatusColors.new, icon: "add-circle", label: "New" },
-  pending: { color: fixieStatusColors.pending, icon: "add-circle", label: "New" },
+  pending: { color: fixieStatusColors.pending, icon: "calendar", label: "Site Visit" },
+  source_parts: { color: fixieStatusColors.source_parts, icon: "construct", label: "Parts" },
+  labor: { color: fixieStatusColors.labor, icon: "briefcase", label: "Labor" },
   in_progress: { color: fixieStatusColors.in_progress, icon: "briefcase", label: "Active" },
+  final_touches: { color: fixieStatusColors.final_touches, icon: "sparkles", label: "Final Touches" },
   completed: { color: fixieStatusColors.completed, icon: "checkmark-circle", label: "Done" },
 };
 
 function mapStatusToFilter(status) {
-  if (status === "new" || status === "pending") return "new";
-  if (status === "in_progress") return "active";
-  if (status === "completed") return "completed";
+  if (isNewRequestStatus(status)) return "new";
+  if (isActiveRequestStatus(status)) return "active";
+  if (isCompletedRequestStatus(status)) return "completed";
   return "new";
 }
 
@@ -120,15 +124,15 @@ export default function EmployeeRequests() {
   const filtered = filter === "all" ? requests : requests.filter((r) => mapStatusToFilter(r.RequestStatus) === filter);
 
   const getAction = (status) => {
-    if (status === "new" || status === "pending") return { label: "Accept", color: fixieColors.gold, next: "in_progress" };
-    if (status === "in_progress") return { label: "Complete", color: fixieColors.success, next: "completed" };
+    if (isNewRequestStatus(status)) return { label: "Accept", color: fixieColors.gold, next: "labor" };
+    if (isActiveRequestStatus(status)) return { label: "Complete", color: fixieColors.success, next: "completed" };
     return null;
   };
 
   const renderItem = ({ item }) => {
-    const config = statusConfig[item.RequestStatus] || statusConfig.new;
+    const config = statusConfig[getTrackerStage(item.RequestStatus).key] || statusConfig.new;
     const action = getAction(item.RequestStatus);
-    const canDecline = item.RequestStatus === "new" || item.RequestStatus === "pending";
+    const canDecline = isNewRequestStatus(item.RequestStatus);
     return (
       <View style={styles.card}>
         <Ionicons name={config.icon} size={24} color={config.color} style={styles.cardIcon} />

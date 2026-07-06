@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import FixieLogo from "../../../components/FixieLogo";
 import { fixieColors, fixieShadows } from "../../../lib/fixie-theme";
+import { isActiveRequestStatus, isNewRequestStatus } from "../../../lib/project-tracker";
 import { supabase } from "../../../lib/supabase";
 
 function SectionHeader({ icon, title, count }) {
@@ -97,8 +98,8 @@ export default function EmployeeDashboard() {
         .order("RequestID", { ascending: false });
 
       if (requests) {
-        setActiveJobs(requests.filter((r) => r.RequestStatus === "in_progress"));
-        setNewRequests(requests.filter((r) => r.RequestStatus === "new" || r.RequestStatus === "pending"));
+        setActiveJobs(requests.filter((r) => isActiveRequestStatus(r.RequestStatus)));
+        setNewRequests(requests.filter((r) => isNewRequestStatus(r.RequestStatus)));
       }
     } catch (e) {
       console.error("Dashboard load error:", e);
@@ -186,7 +187,7 @@ export default function EmployeeDashboard() {
                 customerEmail={r.CustomerTable?.CustomerEmail}
                 actionLabel="Accept Job"
                 actionColor={fixieColors.gold}
-                onAction={() => updateStatus(r.RequestID, "in_progress")}
+                onAction={() => updateStatus(r.RequestID, "labor")}
                 onDecline={() => declineJob(r.RequestID)}
               />
             ))}

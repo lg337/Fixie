@@ -6,8 +6,10 @@ import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TextInput, Touchable
 import CompanyPostsGrid from "../../components/CompanyPostsGrid";
 import FixieLogo from "../../components/FixieLogo";
 import { loadCompanyPosts } from "../../lib/company-posts";
+import { formatPlannerItemForRequest, loadCustomerPlannerItems } from "../../lib/customer-planner";
 import { fixieColors, fixieShadows } from "../../lib/fixie-theme";
 import { notifyRequestsChanged } from "../../lib/request-updates";
+import { isCompanySaved, toggleSavedCompany } from "../../lib/saved-companies";
 import { supabase } from "../../lib/supabase";
 
 export default function CompanyProfile() {
@@ -23,6 +25,10 @@ export default function CompanyProfile() {
   const [posts, setPosts] = useState([]);
   const [avgRating, setAvgRating] = useState(0);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(null);
+  const [customerID, setCustomerID] = useState(null);
+  const [saved, setSaved] = useState(false);
+  const [plannerItems, setPlannerItems] = useState([]);
+  const [includedPlannerKeys, setIncludedPlannerKeys] = useState([]);
 
   const imagePosts = posts.filter((post) => post.mediaType === "image");
   const selectedPhoto = selectedPhotoIndex === null ? null : imagePosts[selectedPhotoIndex];
@@ -31,6 +37,12 @@ export default function CompanyProfile() {
     try {
       setLoading(true);
       const companyID = Number(id);
+      const storedCustomerID = await AsyncStorage.getItem("customerID");
+      if (storedCustomerID) {
+        setCustomerID(storedCustomerID);
+        setSaved(await isCompanySaved(storedCustomerID, companyID));
+        setPlannerItems(await loadCustomerPlannerItems(storedCustomerID));
+      }
       const { data: companyData, error: companyError } = await supabase.from("CompanyTable").select("*").eq("CompanyID", companyID).single();
       if (companyError) throw companyError;
       setCompany(companyData);
@@ -62,7 +74,11 @@ export default function CompanyProfile() {
 
   const handleRequest = async () => {
     try {
-      if (!requestText.trim()) {
+      const selectedPlannerItems = plannerItems.filter((item) => includedPlannerKeys.includes(item.key));
+      const plannerText = selectedPlannerItems.map(formatPlannerItemForRequest).join("\n\n---\n\n");
+      const requestNotes = [requestText.trim(), plannerText].filter(Boolean).join("\n\n---\n\n");
+
+      if (!requestNotes.trim()) {
         Alert.alert("Missing info", "Please enter your request details.");
         return;
       }
@@ -88,7 +104,7 @@ export default function CompanyProfile() {
       if (customerError) throw customerError;
 
       const { error: requestError } = await supabase.from("RequestTable").insert([
-        { CompanyID: companyID, CustomerID: customerID, RequestTitle: null, RequestNotes: requestText.trim(), RequestStatus: "new" },
+        { CompanyID: companyID, CustomerID: customerID, RequestTitle: null, RequestNotes: requestNotes, RequestStatus: "new" },
       ]);
       if (requestError) throw requestError;
 
@@ -113,11 +129,33 @@ export default function CompanyProfile() {
       Alert.alert("Success", "Request submitted successfully.");
       notifyRequestsChanged();
       setRequestText("");
+      setIncludedPlannerKeys([]);
     } catch (error) {
       Alert.alert("Error", error?.message || "Something went wrong.");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleToggleSaved = async () => {
+    if (!company?.CompanyID) return;
+    const storedCustomerID = customerID || (await AsyncStorage.getItem("customerID"));
+    if (!storedCustomerID) {
+      Alert.alert("Login required", "Please log in as a customer first.");
+      return;
+    }
+
+    const nextSavedCompanyIDs = await toggleSavedCompany(storedCustomerID, company.CompanyID);
+    setCustomerID(storedCustomerID);
+    setSaved(nextSavedCompanyIDs.includes(Number(company.CompanyID)));
+  };
+
+  const togglePlannerItem = (item) => {
+    setIncludedPlannerKeys((currentKeys) =>
+      currentKeys.includes(item.key)
+        ? currentKeys.filter((key) => key !== item.key)
+        : [...currentKeys, item.key]
+    );
   };
 
   const openPhoto = (post) => {
@@ -200,6 +238,10 @@ export default function CompanyProfile() {
         <TouchableOpacity onPress={() => router.replace("/customer/home")} style={styles.iconButton}>
           <Ionicons name="arrow-back" size={20} color={fixieColors.text} />
         </TouchableOpacity>
+        <TouchableOpacity onPress={handleToggleSaved} style={[styles.saveHeaderButton, saved && styles.saveHeaderButtonActive]}>
+          <Ionicons name={saved ? "heart" : "heart-outline"} size={20} color={saved ? fixieColors.background : fixieColors.goldLight} />
+          <Text style={[styles.saveHeaderText, saved && styles.saveHeaderTextActive]}>{saved ? "Saved" : "Save"}</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.profileCard}>
@@ -223,6 +265,38 @@ export default function CompanyProfile() {
       <View style={styles.requestBox}>
         <Text style={styles.sectionTitle}>Make a Request</Text>
         <TextInput style={styles.input} placeholder="Enter your request here" placeholderTextColor={fixieColors.textMuted} multiline value={requestText} onChangeText={setRequestText} />
+        {plannerItems.length > 0 ? (
+          <View style={styles.plannerBox}>
+            <Text style={styles.plannerTitle}>Include planner templates</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.plannerScroller}>
+              {plannerItems.map((item) => {
+                const selected = includedPlannerKeys.includes(item.key);
+
+                return (
+                  <TouchableOpacity
+                    key={item.key}
+                    style={[styles.plannerChip, selected && styles.plannerChipSelected]}
+                    onPress={() => togglePlannerItem(item)}
+                  >
+                    <Ionicons
+                      name={selected ? "checkmark-circle" : "add-circle-outline"}
+                      size={17}
+                      color={selected ? fixieColors.background : fixieColors.goldLight}
+                    />
+                    <View style={styles.plannerChipTextWrap}>
+                      <Text style={[styles.plannerChipText, selected && styles.plannerChipTextSelected]} numberOfLines={1}>
+                        {item.label}
+                      </Text>
+                      <Text style={[styles.plannerChipMeta, selected && styles.plannerChipTextSelected]} numberOfLines={1}>
+                        {item.type}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        ) : null}
         <TouchableOpacity style={[styles.button, submitting && styles.buttonDisabled]} onPress={handleRequest} disabled={submitting}>
           <Text style={styles.buttonText}>{submitting ? "Submitting..." : "Submit Request"}</Text>
         </TouchableOpacity>
@@ -300,8 +374,12 @@ const styles = StyleSheet.create({
   container: { flexGrow: 1, backgroundColor: fixieColors.background, padding: 20, paddingBottom: 40 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: fixieColors.background },
   loadingText: { color: fixieColors.textSecondary },
-  headerRow: { marginBottom: 14 },
+  headerRow: { marginBottom: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   iconButton: { width: 42, height: 42, borderRadius: 21, backgroundColor: fixieColors.surface, borderWidth: 1, borderColor: fixieColors.border, alignItems: "center", justifyContent: "center" },
+  saveHeaderButton: { minWidth: 92, height: 42, borderRadius: 21, backgroundColor: fixieColors.surface, borderWidth: 1, borderColor: fixieColors.border, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 14 },
+  saveHeaderButtonActive: { backgroundColor: fixieColors.gold, borderColor: fixieColors.goldLight, ...fixieShadows.glow },
+  saveHeaderText: { color: fixieColors.goldLight, fontWeight: "800", fontSize: 14 },
+  saveHeaderTextActive: { color: fixieColors.background },
   profileCard: { backgroundColor: fixieColors.surfaceElevated, borderRadius: 20, padding: 20, marginBottom: 20, alignItems: "center", borderWidth: 1, borderColor: fixieColors.border, ...fixieShadows.card },
   profileImage: { width: 96, height: 96, borderRadius: 48, marginBottom: 8 },
   companyName: { fontSize: 28, fontWeight: "800", color: fixieColors.text, marginVertical: 15 },
@@ -316,6 +394,15 @@ const styles = StyleSheet.create({
   reviewListBox: { backgroundColor: fixieColors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: fixieColors.border, ...fixieShadows.card },
   sectionTitle: { fontSize: 22, fontWeight: "800", color: fixieColors.text, marginBottom: 15 },
   input: { minHeight: 120, backgroundColor: fixieColors.backgroundAlt, borderWidth: 1, borderColor: fixieColors.border, borderRadius: 16, padding: 12, textAlignVertical: "top", marginBottom: 15, color: fixieColors.text },
+  plannerBox: { marginBottom: 15 },
+  plannerTitle: { color: fixieColors.text, fontSize: 14, fontWeight: "800", marginBottom: 9 },
+  plannerScroller: { gap: 8, paddingRight: 12 },
+  plannerChip: { maxWidth: 190, minHeight: 56, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: fixieColors.backgroundAlt, borderWidth: 1, borderColor: fixieColors.border },
+  plannerChipSelected: { backgroundColor: fixieColors.gold, borderColor: fixieColors.goldLight },
+  plannerChipTextWrap: { flex: 1, minWidth: 0 },
+  plannerChipText: { color: fixieColors.text, fontSize: 12, fontWeight: "800" },
+  plannerChipMeta: { color: fixieColors.textMuted, fontSize: 11, fontWeight: "700", marginTop: 2 },
+  plannerChipTextSelected: { color: fixieColors.background },
   button: { backgroundColor: fixieColors.gold, paddingVertical: 14, borderRadius: 16, alignItems: "center" },
   buttonDisabled: { opacity: 0.7 },
   buttonText: { color: fixieColors.background, fontWeight: "800", fontSize: 16 },
