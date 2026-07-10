@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
-  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -133,16 +132,11 @@ export default function CustomerHome() {
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMode, setModalMode] = useState("request");
   const [selectedCompany, setSelectedCompany] = useState(null);
-  const [selectedCompanyName, setSelectedCompanyName] = useState("");
   const [companies, setCompanies] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [search, setSearch] = useState("");
   const [selectedTrade, setSelectedTrade] = useState(ALL_SERVICE_CATEGORY);
   const [loading, setLoading] = useState(true);
-  const [reviewsVisible, setReviewsVisible] = useState(false);
-  const [reviewsLoading, setReviewsLoading] = useState(false);
-  const [reviews, setReviews] = useState([]);
-  const [avgRating, setAvgRating] = useState("0.0");
   const [savedCompanyIDs, setSavedCompanyIDs] = useState([]);
 
   const serviceCategories = useMemo(() => buildServiceCategories(companies), [companies]);
@@ -240,36 +234,6 @@ export default function CustomerHome() {
     const storedID = customerID || (await AsyncStorage.getItem("customerID"));
     if (!storedID) return;
     setSavedCompanyIDs(await toggleSavedCompany(storedID, companyID));
-  };
-
-  const openReviews = async (company) => {
-    setSelectedCompany(company.CompanyID);
-    setSelectedCompanyName(company.CompanyName || "Company");
-    setReviews([]);
-    setAvgRating("0.0");
-    setReviewsVisible(true);
-    setReviewsLoading(true);
-
-    try {
-      const { data, error } = await supabase
-        .from("ReviewTable")
-        .select(`CustomerID, Stars, Review, CustomerTable (CustomerName)`)
-        .eq("CompanyID", company.CompanyID);
-
-      if (error) throw error;
-
-      const nextReviews = data || [];
-      setReviews(nextReviews);
-      if (nextReviews.length > 0) {
-        const total = nextReviews.reduce((sum, item) => sum + Number(item.Stars || 0), 0);
-        setAvgRating((total / nextReviews.length).toFixed(1));
-      }
-    } catch (error) {
-      console.log("Reviews load error:", error);
-      setReviews([]);
-    } finally {
-      setReviewsLoading(false);
-    }
   };
 
   if (loading) {
@@ -403,14 +367,6 @@ export default function CustomerHome() {
                   >
                     <Text style={styles.cardActionText}>Request</Text>
                   </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.cardAction, styles.reviewAction]}
-                    onPress={(e) => { e.stopPropagation(); openReviews(company); }}
-                  >
-                    <Ionicons name="star" size={12} color={fixieColors.goldLight} />
-                    <Text style={styles.cardActionText}>Reviews</Text>
-                  </TouchableOpacity>
                 </View>
               </TouchableOpacity>
             );
@@ -435,60 +391,6 @@ export default function CustomerHome() {
         mode={modalMode}
       />
 
-      <Modal visible={reviewsVisible} transparent animationType="slide" onRequestClose={() => setReviewsVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>{selectedCompanyName}</Text>
-                <Text style={styles.modalSubtitle}>Customer reviews</Text>
-              </View>
-              <TouchableOpacity onPress={() => setReviewsVisible(false)} style={styles.modalClose}>
-                <Ionicons name="close" size={20} color={fixieColors.text} />
-              </TouchableOpacity>
-            </View>
-
-            {reviewsLoading ? (
-              <View style={styles.reviewsLoading}>
-                <ActivityIndicator color={fixieColors.gold} />
-              </View>
-            ) : (
-              <>
-                <View style={styles.ratingRow}>
-                  <Ionicons name="star" size={20} color={fixieColors.goldLight} />
-                  <Text style={styles.ratingText}>{avgRating}</Text>
-                  <Text style={styles.ratingCount}>({reviews.length} {reviews.length === 1 ? "review" : "reviews"})</Text>
-                </View>
-
-                <ScrollView style={styles.reviewsList} showsVerticalScrollIndicator={false}>
-                  {reviews.length === 0 ? (
-                    <Text style={styles.noReviews}>No reviews yet.</Text>
-                  ) : (
-                    reviews.map((item, index) => (
-                      <View key={`${item.CustomerID}-${index}`} style={styles.reviewCard}>
-                        <View style={styles.reviewTopRow}>
-                          <Text style={styles.reviewName}>{item.CustomerTable?.CustomerName || "Customer"}</Text>
-                          <View style={styles.reviewStarsRow}>
-                            {[1, 2, 3, 4, 5].map((value) => (
-                              <Ionicons
-                                key={value}
-                                name={value <= Number(item.Stars || 0) ? "star" : "star-outline"}
-                                size={14}
-                                color={fixieColors.goldLight}
-                              />
-                            ))}
-                          </View>
-                        </View>
-                        <Text style={styles.reviewBody}>{item.Review || ""}</Text>
-                      </View>
-                    ))
-                  )}
-                </ScrollView>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -789,13 +691,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "rgba(200, 169, 106, 0.16)",
   },
-  reviewAction: {
-    flexDirection: "row",
-    gap: 4,
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    borderWidth: 1,
-    borderColor: fixieColors.border,
-  },
   cardActionText: {
     color: fixieColors.goldLight,
     fontSize: 11,
@@ -854,118 +749,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 12,
     color: fixieColors.background,
-    fontWeight: "800",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: fixieColors.overlay,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modalBox: {
-    width: "100%",
-    maxWidth: 480,
-    maxHeight: "80%",
-    backgroundColor: fixieColors.surface,
-    borderRadius: 24,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: fixieColors.border,
-    ...fixieShadows.card,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: fixieColors.text,
-  },
-  modalSubtitle: {
-    fontSize: 13,
-    color: fixieColors.textSecondary,
-    marginTop: 4,
-  },
-  modalClose: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: fixieColors.surfaceElevated,
-  },
-  ratingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 16,
-  },
-  ratingText: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: fixieColors.goldLight,
-  },
-  ratingCount: {
-    fontSize: 13,
-    color: fixieColors.textMuted,
-  },
-  reviewsList: {
-    maxHeight: 320,
-    marginBottom: 16,
-  },
-  reviewsLoading: {
-    minHeight: 180,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  noReviews: {
-    color: fixieColors.textMuted,
-    fontSize: 15,
-    textAlign: "center",
-    paddingVertical: 20,
-  },
-  reviewCard: {
-    backgroundColor: fixieColors.surfaceElevated,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: fixieColors.border,
-  },
-  reviewTopRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  reviewName: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: fixieColors.text,
-  },
-  reviewStarsRow: {
-    flexDirection: "row",
-    gap: 2,
-  },
-  reviewBody: {
-    fontSize: 13,
-    color: fixieColors.textSecondary,
-    lineHeight: 19,
-  },
-  modalRequestButton: {
-    backgroundColor: fixieColors.gold,
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: "center",
-    ...fixieShadows.glow,
-  },
-  modalRequestButtonText: {
-    color: fixieColors.background,
-    fontSize: 16,
     fontWeight: "800",
   },
 });

@@ -398,6 +398,7 @@ export default function CustomerInspiration() {
     tags: "",
   });
   const { width } = useWindowDimensions();
+  const isPhone = width < 640;
   const columnCount = width >= 1040 ? 4 : width >= 720 ? 3 : 2;
   const allIdeas = useMemo(() => [...customIdeas, ...INSPIRATION_IDEAS, ...EXTRA_INSPIRATION_IDEAS], [customIdeas]);
 
@@ -503,18 +504,22 @@ export default function CustomerInspiration() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, isPhone && styles.phoneHeader]}>
         <View style={styles.headerTopRow}>
           <View style={styles.headerCopy}>
-            <Text style={styles.eyebrow}>Fixie Ideas</Text>
-            <Text style={styles.titleText}>Find your next project</Text>
+            <Text style={[styles.eyebrow, isPhone && styles.phoneEyebrow]}>Fixie Ideas</Text>
+            <Text style={[styles.titleText, isPhone && styles.phoneTitleText]}>
+              {isPhone ? "Project ideas" : "Find your next project"}
+            </Text>
           </View>
           <TouchableOpacity style={styles.addIdeaButton} onPress={() => setAddModalVisible(true)} activeOpacity={0.8}>
             <Ionicons name="add" size={18} color={fixieColors.background} />
             <Text style={styles.addIdeaText}>Add</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.subtitle}>Save room ideas, explore project details, and turn inspiration into a contractor-ready plan.</Text>
+        {!isPhone ? (
+          <Text style={styles.subtitle}>Save room ideas, explore project details, and turn inspiration into a contractor-ready plan.</Text>
+        ) : null}
       </View>
 
       <View style={styles.searchWrap}>
@@ -766,6 +771,10 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 12,
   },
+  phoneHeader: {
+    paddingTop: 8,
+    paddingBottom: 6,
+  },
   headerTopRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -799,11 +808,18 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: "uppercase",
   },
+  phoneEyebrow: {
+    fontSize: 10,
+  },
   titleText: {
     marginTop: 5,
     fontSize: 28,
     fontWeight: "800",
     color: fixieColors.text,
+  },
+  phoneTitleText: {
+    marginTop: 2,
+    fontSize: 20,
   },
   subtitle: {
     marginTop: 6,

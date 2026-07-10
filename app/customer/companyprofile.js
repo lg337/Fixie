@@ -3,7 +3,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import CompanyPostsGrid from "../../components/CompanyPostsGrid";
 import FixieLogo from "../../components/FixieLogo";
 import { loadCompanyPosts } from "../../lib/company-posts";
 import { formatPlannerItemForRequest, loadCustomerPlannerItems } from "../../lib/customer-planner";
@@ -11,14 +10,13 @@ import { fixieColors, fixieShadows } from "../../lib/fixie-theme";
 import { notifyRequestsChanged } from "../../lib/request-updates";
 import { isCompanySaved, toggleSavedCompany } from "../../lib/saved-companies";
 import { supabase } from "../../lib/supabase";
+import CustomerBottomNav from "./components/CustomerBottomNav";
 
 export default function CompanyProfile() {
   const { id } = useLocalSearchParams();
   const [company, setCompany] = useState(null);
   const [requestText, setRequestText] = useState("");
-  const [reviewText, setReviewText] = useState("");
-  const [stars, setStars] = useState(0);
-  const [reviewLoading, setReviewLoading] = useState(false);
+  const [showRequestForm, setShowRequestForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [reviews, setReviews] = useState([]);
@@ -130,6 +128,7 @@ export default function CompanyProfile() {
       notifyRequestsChanged();
       setRequestText("");
       setIncludedPlannerKeys([]);
+      setShowRequestForm(false);
     } catch (error) {
       Alert.alert("Error", error?.message || "Something went wrong.");
     } finally {
@@ -181,48 +180,6 @@ export default function CompanyProfile() {
     });
   };
 
-  const handleReviewSubmit = async () => {
-    try {
-      if (!stars || stars < 1 || stars > 5) {
-        Alert.alert("Missing rating", "Please choose a star rating.");
-        return;
-      }
-      if (!reviewText.trim()) {
-        Alert.alert("Missing review", "Please write a review.");
-        return;
-      }
-      const storedCustomerID = await AsyncStorage.getItem("customerID");
-      if (!storedCustomerID) {
-        Alert.alert("Login required", "Please log in as a customer first.");
-        return;
-      }
-      if (!company?.CompanyID) {
-        Alert.alert("Error", "Company information is missing.");
-        return;
-      }
-      setReviewLoading(true);
-      const customerID = Number(storedCustomerID);
-      const companyID = Number(company.CompanyID);
-      const { data: existingReview, error: existingReviewError } = await supabase.from("ReviewTable").select("CustomerID, CompanyID").eq("CustomerID", customerID).eq("CompanyID", companyID).maybeSingle();
-      if (existingReviewError) throw existingReviewError;
-      if (existingReview) {
-        const { error: updateError } = await supabase.from("ReviewTable").update({ Stars: stars, Review: reviewText.trim() }).eq("CustomerID", customerID).eq("CompanyID", companyID);
-        if (updateError) throw updateError;
-      } else {
-        const { error: insertError } = await supabase.from("ReviewTable").insert([{ CustomerID: customerID, CompanyID: companyID, Stars: stars, Review: reviewText.trim() }]);
-        if (insertError) throw insertError;
-      }
-      Alert.alert("Success", "Review submitted.");
-      setReviewText("");
-      setStars(0);
-      loadPage();
-    } catch (error) {
-      Alert.alert("Error", error.message || "Could not submit review.");
-    } finally {
-      setReviewLoading(false);
-    }
-  };
-
   if (loading) {
     return <View style={styles.center}><Text style={styles.loadingText}>Loading...</Text></View>;
   }
@@ -233,7 +190,8 @@ export default function CompanyProfile() {
 
   return (
     <>
-    <ScrollView contentContainerStyle={styles.container}>
+    <View style={styles.screen}>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
         <TouchableOpacity onPress={() => router.replace("/customer/home")} style={styles.iconButton}>
           <Ionicons name="arrow-back" size={20} color={fixieColors.text} />
@@ -256,65 +214,81 @@ export default function CompanyProfile() {
         </View>
       </View>
 
-      <View style={styles.galleryBox}>
-        <Text style={styles.sectionTitle}>Past Work</Text>
-        <Text style={styles.galleryIntro}>Browse project photos and media shared directly from this company profile.</Text>
-        <CompanyPostsGrid posts={posts} emptyText="This company has not posted project media yet." onPostPress={openPhoto} />
-      </View>
-
       <View style={styles.requestBox}>
-        <Text style={styles.sectionTitle}>Make a Request</Text>
-        <TextInput style={styles.input} placeholder="Enter your request here" placeholderTextColor={fixieColors.textMuted} multiline value={requestText} onChangeText={setRequestText} />
-        {plannerItems.length > 0 ? (
-          <View style={styles.plannerBox}>
-            <Text style={styles.plannerTitle}>Include planner templates</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.plannerScroller}>
-              {plannerItems.map((item) => {
-                const selected = includedPlannerKeys.includes(item.key);
+        <TouchableOpacity
+          style={styles.requestCtaButton}
+          onPress={() => setShowRequestForm((current) => !current)}
+          activeOpacity={0.82}
+        >
+          <Ionicons name="paper-plane-outline" size={19} color={fixieColors.background} />
+          <Text style={styles.requestCtaText}>Make a Request</Text>
+          <Ionicons name={showRequestForm ? "chevron-up" : "chevron-down"} size={18} color={fixieColors.background} />
+        </TouchableOpacity>
 
-                return (
-                  <TouchableOpacity
-                    key={item.key}
-                    style={[styles.plannerChip, selected && styles.plannerChipSelected]}
-                    onPress={() => togglePlannerItem(item)}
-                  >
-                    <Ionicons
-                      name={selected ? "checkmark-circle" : "add-circle-outline"}
-                      size={17}
-                      color={selected ? fixieColors.background : fixieColors.goldLight}
-                    />
-                    <View style={styles.plannerChipTextWrap}>
-                      <Text style={[styles.plannerChipText, selected && styles.plannerChipTextSelected]} numberOfLines={1}>
-                        {item.label}
-                      </Text>
-                      <Text style={[styles.plannerChipMeta, selected && styles.plannerChipTextSelected]} numberOfLines={1}>
-                        {item.type}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+        {showRequestForm ? (
+          <View style={styles.requestForm}>
+            <TextInput style={styles.input} placeholder="Enter your request here" placeholderTextColor={fixieColors.textMuted} multiline value={requestText} onChangeText={setRequestText} />
+            {plannerItems.length > 0 ? (
+              <View style={styles.plannerBox}>
+                <Text style={styles.plannerTitle}>Include planner templates</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.plannerScroller}>
+                  {plannerItems.map((item) => {
+                    const selected = includedPlannerKeys.includes(item.key);
+
+                    return (
+                      <TouchableOpacity
+                        key={item.key}
+                        style={[styles.plannerChip, selected && styles.plannerChipSelected]}
+                        onPress={() => togglePlannerItem(item)}
+                      >
+                        <Ionicons
+                          name={selected ? "checkmark-circle" : "add-circle-outline"}
+                          size={17}
+                          color={selected ? fixieColors.background : fixieColors.goldLight}
+                        />
+                        <View style={styles.plannerChipTextWrap}>
+                          <Text style={[styles.plannerChipText, selected && styles.plannerChipTextSelected]} numberOfLines={1}>
+                            {item.label}
+                          </Text>
+                          <Text style={[styles.plannerChipMeta, selected && styles.plannerChipTextSelected]} numberOfLines={1}>
+                            {item.type}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            ) : null}
+            <TouchableOpacity style={[styles.button, submitting && styles.buttonDisabled]} onPress={handleRequest} disabled={submitting}>
+              <Text style={styles.buttonText}>{submitting ? "Submitting..." : "Submit Request"}</Text>
+            </TouchableOpacity>
           </View>
         ) : null}
-        <TouchableOpacity style={[styles.button, submitting && styles.buttonDisabled]} onPress={handleRequest} disabled={submitting}>
-          <Text style={styles.buttonText}>{submitting ? "Submitting..." : "Submit Request"}</Text>
-        </TouchableOpacity>
       </View>
 
-      <View style={styles.reviewBox}>
-        <Text style={styles.sectionTitle}>Leave a Review</Text>
-        <View style={styles.starRow}>
-          {[1, 2, 3, 4, 5].map((value) => (
-            <TouchableOpacity key={value} onPress={() => setStars(value)} style={styles.starButton}>
-              <Text style={styles.starText}>{value <= stars ? "★" : "☆"}</Text>
-            </TouchableOpacity>
-          ))}
+      <View style={styles.portfolioSection}>
+        <View style={styles.portfolioHeader}>
+          <Text style={styles.sectionTitle}>Past Work</Text>
+          <Text style={styles.portfolioCount}>{imagePosts.length} {imagePosts.length === 1 ? "post" : "posts"}</Text>
         </View>
-        <TextInput style={styles.input} placeholder="Write your review" placeholderTextColor={fixieColors.textMuted} multiline value={reviewText} onChangeText={setReviewText} />
-        <TouchableOpacity style={[styles.button, reviewLoading && styles.buttonDisabled]} onPress={handleReviewSubmit} disabled={reviewLoading}>
-          <Text style={styles.buttonText}>{reviewLoading ? "Submitting..." : "Submit Review"}</Text>
-        </TouchableOpacity>
+        <Text style={styles.galleryIntro}>Scroll through project photos shared by {company.CompanyName}.</Text>
+
+        {imagePosts.length === 0 ? (
+          <View style={styles.emptyPortfolioCard}>
+            <Ionicons name="images-outline" size={34} color={fixieColors.goldLight} />
+            <Text style={styles.emptyPortfolioTitle}>No project photos yet</Text>
+            <Text style={styles.emptyPortfolioText}>This company has not added portfolio work to their profile.</Text>
+          </View>
+        ) : (
+          <View style={styles.workGrid}>
+            {imagePosts.map((post, index) => (
+              <TouchableOpacity key={post.id} style={styles.workTile} activeOpacity={0.9} onPress={() => openPhoto(post)}>
+                <Image source={{ uri: post.url }} style={[styles.workTileImage, index % 3 === 1 && styles.workTileImageTall]} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
 
       <View style={styles.reviewListBox}>
@@ -330,6 +304,8 @@ export default function CompanyProfile() {
         ))}
       </View>
     </ScrollView>
+    <CustomerBottomNav />
+    </View>
     <Modal visible={!!selectedPhoto} transparent animationType="fade" onRequestClose={closePhoto}>
       <View style={styles.photoModal}>
         <TouchableOpacity style={styles.photoCloseButton} onPress={closePhoto}>
@@ -371,7 +347,9 @@ export default function CompanyProfile() {
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, backgroundColor: fixieColors.background, padding: 20, paddingBottom: 40 },
+  screen: { flex: 1, backgroundColor: fixieColors.background },
+  scroll: { flex: 1, backgroundColor: fixieColors.background },
+  container: { flexGrow: 1, backgroundColor: fixieColors.background, padding: 20, paddingBottom: 28 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: fixieColors.background },
   loadingText: { color: fixieColors.textSecondary },
   headerRow: { marginBottom: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
@@ -387,10 +365,21 @@ const styles = StyleSheet.create({
   ratingRow: { flexDirection: "row", alignItems: "center", marginTop: 6, gap: 8 },
   ratingText: { fontSize: 18, fontWeight: "800", color: fixieColors.goldLight },
   ratingCount: { fontSize: 14, color: fixieColors.textMuted },
-  galleryBox: { backgroundColor: fixieColors.surface, borderRadius: 20, padding: 20, marginBottom: 20, borderWidth: 1, borderColor: fixieColors.border, ...fixieShadows.card },
   galleryIntro: { fontSize: 14, color: fixieColors.textSecondary, marginBottom: 14, lineHeight: 20 },
-  requestBox: { backgroundColor: fixieColors.surface, borderRadius: 20, padding: 20, marginBottom: 20, borderWidth: 1, borderColor: fixieColors.border, ...fixieShadows.card },
-  reviewBox: { backgroundColor: fixieColors.surface, borderRadius: 20, padding: 20, marginBottom: 20, borderWidth: 1, borderColor: fixieColors.border, ...fixieShadows.card },
+  portfolioSection: { marginBottom: 20 },
+  portfolioHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  portfolioCount: { color: fixieColors.textMuted, fontSize: 13, fontWeight: "700" },
+  workGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  workTile: { width: "48%", overflow: "hidden", backgroundColor: fixieColors.surfaceElevated, borderRadius: 18, borderWidth: 1, borderColor: fixieColors.border, ...fixieShadows.card },
+  workTileImage: { width: "100%", height: 178, backgroundColor: fixieColors.surfaceElevated },
+  workTileImageTall: { height: 218 },
+  emptyPortfolioCard: { minHeight: 170, borderRadius: 18, backgroundColor: fixieColors.surface, borderWidth: 1, borderColor: fixieColors.border, alignItems: "center", justifyContent: "center", padding: 22, ...fixieShadows.card },
+  emptyPortfolioTitle: { color: fixieColors.text, fontSize: 17, fontWeight: "900", marginTop: 10 },
+  emptyPortfolioText: { color: fixieColors.textSecondary, fontSize: 13, textAlign: "center", lineHeight: 19, marginTop: 6 },
+  requestBox: { backgroundColor: fixieColors.surface, borderRadius: 20, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: fixieColors.border, ...fixieShadows.card },
+  requestCtaButton: { minHeight: 54, borderRadius: 16, backgroundColor: fixieColors.gold, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 16, ...fixieShadows.glow },
+  requestCtaText: { color: fixieColors.background, fontSize: 16, fontWeight: "900", flex: 1, textAlign: "center" },
+  requestForm: { marginTop: 14 },
   reviewListBox: { backgroundColor: fixieColors.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: fixieColors.border, ...fixieShadows.card },
   sectionTitle: { fontSize: 22, fontWeight: "800", color: fixieColors.text, marginBottom: 15 },
   input: { minHeight: 120, backgroundColor: fixieColors.backgroundAlt, borderWidth: 1, borderColor: fixieColors.border, borderRadius: 16, padding: 12, textAlignVertical: "top", marginBottom: 15, color: fixieColors.text },
@@ -406,9 +395,6 @@ const styles = StyleSheet.create({
   button: { backgroundColor: fixieColors.gold, paddingVertical: 14, borderRadius: 16, alignItems: "center" },
   buttonDisabled: { opacity: 0.7 },
   buttonText: { color: fixieColors.background, fontWeight: "800", fontSize: 16 },
-  starRow: { flexDirection: "row", marginBottom: 15, gap: 8 },
-  starButton: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: fixieColors.backgroundAlt, borderWidth: 1, borderColor: fixieColors.border },
-  starText: { fontSize: 28, color: fixieColors.goldLight },
   emptyText: { fontSize: 15, color: fixieColors.textMuted },
   reviewCard: { backgroundColor: fixieColors.surfaceElevated, borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: fixieColors.border },
   reviewTopRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8, alignItems: "center" },

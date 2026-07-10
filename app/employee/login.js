@@ -51,7 +51,7 @@ function InputRow({ icon, value, onChangeText, onBlur, placeholder, secureTextEn
 }
 
 export default function EmployeeLogin() {
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [passwordEntered, setPasswordEntered] = useState(false);
@@ -61,8 +61,8 @@ export default function EmployeeLogin() {
 
   const isPhone = width < 640;
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
-  const isShort = height < 760;
-  const logoSize = isDesktopWeb ? 350 : isPhone ? 200 : 250;
+  const logoSize = isDesktopWeb ? 150 : isPhone ? 112 : 132;
+  const logoSlotHeight = isDesktopWeb ? 330 : isPhone ? 170 : 220;
   const shellMaxWidth = isDesktopWeb ? 720 : isPhone ? 420 : 560;
   const shellPadding = isDesktopWeb ? 54 : isPhone ? 20 : 32;
   const topSpacing = isDesktopWeb ? 10 : isPhone ? 8 : 10;
@@ -146,6 +146,7 @@ export default function EmployeeLogin() {
               {
                 marginBottom: isDesktopWeb ? 10 : isPhone ? 6 : 10,
                 marginTop: isDesktopWeb ? 0 : 0,
+                minHeight: logoSlotHeight,
               },
             ]}
           >
@@ -200,7 +201,7 @@ export default function EmployeeLogin() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#3A3A3C",
+    backgroundColor: fixieColors.background,
     paddingHorizontal: Platform.OS === "web" ? 0 : 24,
   },
   scrollContent: {
@@ -237,6 +238,7 @@ const styles = StyleSheet.create({
   },
   logoBlock: {
     alignItems: "center",
+    justifyContent: "center",
   },
   form: {
     gap: 10,
