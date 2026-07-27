@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import FixieLogo from "../../components/FixieLogo";
 import RequestModal from "../../components/request";
+import { getCompanyPublicPath } from "../../lib/company-links";
 import { fixieColors, fixieShadows } from "../../lib/fixie-theme";
 import { loadSavedCompanyIDs, toggleSavedCompany } from "../../lib/saved-companies";
 import { supabase } from "../../lib/supabase";
@@ -335,7 +336,7 @@ export default function CustomerHome() {
               <TouchableOpacity
                 key={company.CompanyID}
                 style={[styles.card, layout.isPhone && styles.phoneCard, layout.isDesktop && styles.desktopCard]}
-                onPress={() => router.push({ pathname: "/customer/companyprofile", params: { id: company.CompanyID } })}
+                onPress={() => router.push(getCompanyPublicPath(company))}
                 activeOpacity={0.7}
               >
                 <TouchableOpacity
@@ -353,7 +354,7 @@ export default function CustomerHome() {
                     <Text style={styles.placeholderText}>{company.CompanyName?.[0] ?? "?"}</Text>
                   </View>
                 )}
-                <Text style={styles.imageText} numberOfLines={1}>
+                <Text style={styles.imageText} numberOfLines={1} dataSet={{ fixieNoTranslate: "true" }}>
                   {company.CompanyName}
                 </Text>
                 <Text style={styles.descriptionText} numberOfLines={2}>

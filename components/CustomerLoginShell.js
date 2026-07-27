@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -52,6 +52,7 @@ function InputRow({ icon, value, onChangeText, onBlur, placeholder, secureTextEn
 
 export default function CustomerLoginShell() {
   const router = useRouter();
+  const { returnTo, request } = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -68,6 +69,8 @@ export default function CustomerLoginShell() {
   const shellPadding = isDesktopWeb ? 54 : isPhone ? 20 : 36;
   const topSpacing = isDesktopWeb ? 10 : isPhone ? 8 : 10;
   const showValidationRules = passwordEntered && password.length > 0 && !isValidPassword(password);
+  const safeReturnTo = typeof returnTo === "string" && returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "";
+  const postLoginRoute = safeReturnTo ? `${safeReturnTo}${request ? "?request=1" : ""}` : "/customer/home";
 
   const handleGuestLogin = async () => {
     await AsyncStorage.setItem("customerID", "guest");
@@ -112,7 +115,7 @@ export default function CustomerLoginShell() {
       }
 
       await AsyncStorage.setItem("customerID", String(data.CustomerID));
-      router.replace("/customer/home");
+      router.replace(postLoginRoute);
     } catch {
       setErrorMsg("Something went wrong. Please try again.");
     } finally {
@@ -198,7 +201,14 @@ export default function CustomerLoginShell() {
 
             <View style={styles.footerLinks}>
               <Text style={styles.footerText}>Don&apos;t have an account? </Text>
-              <TouchableOpacity onPress={() => router.push("/customer/signup")}>
+              <TouchableOpacity
+                onPress={() =>
+                  router.push({
+                    pathname: "/customer/signup",
+                    params: safeReturnTo ? { returnTo: safeReturnTo, request: request ? "1" : undefined } : {},
+                  })
+                }
+              >
                 <Text style={styles.footerLink}>Sign Up</Text>
               </TouchableOpacity>
             </View>

@@ -158,7 +158,7 @@ export default function CompanyHome() {
           )}
           <View style={{ flex: 1 }}>
             <Text style={styles.eyebrow}>Company Dashboard</Text>
-            <Text style={styles.companyName}>{companyData?.CompanyName || "Company"}</Text>
+            <Text style={styles.companyName} dataSet={{ fixieNoTranslate: "true" }}>{companyData?.CompanyName || "Company"}</Text>
             <Text style={styles.companyIdText}>Company ID: {companyID}</Text>
           </View>
         </View>

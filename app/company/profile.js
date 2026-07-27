@@ -7,6 +7,7 @@ import { ActivityIndicator, Alert, Image, Platform, SafeAreaView, ScrollView, St
 import CompanyPostsGrid from "../../components/CompanyPostsGrid";
 import FixieLogo from "../../components/FixieLogo";
 import { EMAIL_ALLOWED_TEXT, PHONE_ALLOWED_TEXT, formatPhoneInput, isValidEmail, isValidPhone, normalizePhoneDigits } from "../../lib/auth-validation";
+import { getCompanyPublicPath } from "../../lib/company-links";
 import { loadCompanyPosts, saveCompanyPosts, uploadCompanyPostMedia } from "../../lib/company-posts";
 import { fixieColors, fixieShadows } from "../../lib/fixie-theme";
 import { supabase } from "../../lib/supabase";
@@ -221,6 +222,12 @@ export default function CompanyProfile() {
     return <SafeAreaView style={styles.centered}><ActivityIndicator size="large" color={fixieColors.gold} /></SafeAreaView>;
   }
 
+  const publicCompanyPath = companyID ? getCompanyPublicPath({ CompanyID: companyID, CompanyName: companyName }) : "";
+  const publicCompanyUrl =
+    Platform.OS === "web" && typeof window !== "undefined"
+      ? `${window.location.origin}${publicCompanyPath}`
+      : publicCompanyPath;
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.headerRow}>
@@ -234,7 +241,7 @@ export default function CompanyProfile() {
           <TouchableOpacity style={styles.imageWrap} onPress={pickImage}>
             {profileImageUrl ? <Image source={{ uri: profileImageUrl }} style={styles.profileImage} /> : <FixieLogo size={94} />}
           </TouchableOpacity>
-          <Text style={styles.heroName}>{companyName || "Company"}</Text>
+          <Text style={styles.heroName} dataSet={{ fixieNoTranslate: "true" }}>{companyName || "Company"}</Text>
           <Text style={styles.heroSubtitle}>Tap the image area to keep your public company image current.</Text>
         </View>
 
@@ -255,6 +262,20 @@ export default function CompanyProfile() {
             <Text style={styles.saveButtonText}>{saving ? "Saving..." : "Save Profile"}</Text>
           </TouchableOpacity>
         </View>
+
+        {companyID && companyID !== "demo" ? (
+          <View style={styles.publicLinkCard}>
+            <View style={styles.publicLinkHeader}>
+              <Ionicons name="link-outline" size={22} color={fixieColors.goldLight} />
+              <Text style={styles.publicLinkTitle}>Public Page</Text>
+            </View>
+            <Text style={styles.publicLinkText} selectable>{publicCompanyUrl}</Text>
+            <TouchableOpacity style={styles.publicLinkButton} onPress={() => router.push(publicCompanyPath)}>
+              <Ionicons name="open-outline" size={18} color={fixieColors.background} />
+              <Text style={styles.publicLinkButtonText}>View Public Page</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         <View style={styles.postSection}>
           <Text style={styles.sectionTitle}>Past Work Posts</Text>
@@ -313,6 +334,12 @@ const styles = StyleSheet.create({
   heroName: { fontSize: 24, fontWeight: "800", color: fixieColors.text },
   heroSubtitle: { marginTop: 8, textAlign: "center", color: fixieColors.textSecondary, lineHeight: 20 },
   formCard: { backgroundColor: fixieColors.surface, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: fixieColors.border, marginBottom: 18, ...fixieShadows.card },
+  publicLinkCard: { backgroundColor: fixieColors.surface, borderRadius: 24, padding: 18, borderWidth: 1, borderColor: fixieColors.border, marginBottom: 18, ...fixieShadows.card },
+  publicLinkHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
+  publicLinkTitle: { color: fixieColors.text, fontSize: 18, fontWeight: "800" },
+  publicLinkText: { color: fixieColors.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: 14 },
+  publicLinkButton: { minHeight: 46, borderRadius: 15, backgroundColor: fixieColors.gold, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 },
+  publicLinkButtonText: { color: fixieColors.background, fontSize: 15, fontWeight: "800" },
   postSection: { backgroundColor: fixieColors.surface, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: fixieColors.border, marginBottom: 18, ...fixieShadows.card },
   label: { fontSize: 14, fontWeight: "700", marginBottom: 8, color: fixieColors.text },
   input: { backgroundColor: fixieColors.backgroundAlt, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 13, marginBottom: 16, borderWidth: 1, borderColor: fixieColors.border, color: fixieColors.text },

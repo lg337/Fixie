@@ -15,10 +15,14 @@ const initialRouteResetScript = `
 
   if (publicRoutes[pathname]) return;
 
+  function isPathInSection(sectionPath) {
+    return pathname === sectionPath || pathname.indexOf(sectionPath + "/") === 0;
+  }
+
   var target = null;
-  if (pathname.indexOf("/customer") === 0) target = "/customer/home";
-  if (pathname.indexOf("/company") === 0) target = "/company/home";
-  if (pathname.indexOf("/employee") === 0) target = "/employee";
+  if (isPathInSection("/customer")) target = "/customer/home";
+  if (isPathInSection("/company")) target = "/company/home";
+  if (isPathInSection("/employee")) target = "/employee";
 
   if (target && target !== pathname) {
     window.location.replace(target);

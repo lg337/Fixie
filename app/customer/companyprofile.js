@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, usePathname } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import FixieLogo from "../../components/FixieLogo";
+import { getCompanyIDFromPublicSlug, getCompanyPublicPath } from "../../lib/company-links";
 import { loadCompanyPosts } from "../../lib/company-posts";
 import { formatPlannerItemForRequest, loadCustomerPlannerItems } from "../../lib/customer-planner";
 import { fixieColors, fixieShadows } from "../../lib/fixie-theme";
@@ -13,12 +14,14 @@ import { supabase } from "../../lib/supabase";
 import CustomerBottomNav from "./components/CustomerBottomNav";
 
 export default function CompanyProfile() {
-  const { id } = useLocalSearchParams();
+  const { id, slug, request } = useLocalSearchParams();
+  const pathname = usePathname();
   const [company, setCompany] = useState(null);
   const [requestText, setRequestText] = useState("");
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [reviews, setReviews] = useState([]);
   const [posts, setPosts] = useState([]);
   const [avgRating, setAvgRating] = useState(0);
@@ -30,11 +33,16 @@ export default function CompanyProfile() {
 
   const imagePosts = posts.filter((post) => post.mediaType === "image");
   const selectedPhoto = selectedPhotoIndex === null ? null : imagePosts[selectedPhotoIndex];
+  const isPublicCompanyPage = pathname?.startsWith("/companies/");
 
   const loadPage = useCallback(async () => {
     try {
       setLoading(true);
-      const companyID = Number(id);
+      const companyID = Number(id) || getCompanyIDFromPublicSlug(slug);
+      if (!companyID) {
+        setCompany(null);
+        return;
+      }
       const storedCustomerID = await AsyncStorage.getItem("customerID");
       if (storedCustomerID) {
         setCustomerID(storedCustomerID);
@@ -64,11 +72,38 @@ export default function CompanyProfile() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, slug]);
 
   useEffect(() => {
-    if (id) loadPage();
-  }, [id, loadPage]);
+    if (id || slug) loadPage();
+  }, [id, slug, loadPage]);
+
+  useEffect(() => {
+    if (request === "1") setShowRequestForm(true);
+  }, [request]);
+
+  const handleRequestCta = async () => {
+    const storedCustomerID = await AsyncStorage.getItem("customerID");
+    if (!storedCustomerID || storedCustomerID === "guest") {
+      setShowAuthPrompt(true);
+      return;
+    }
+
+    setShowRequestForm((current) => !current);
+  };
+
+  const getRequestReturnPath = () => (isPublicCompanyPage ? pathname : getCompanyPublicPath(company));
+
+  const goToCustomerAuth = (pathname) => {
+    setShowAuthPrompt(false);
+    router.push({
+      pathname,
+      params: {
+        returnTo: getRequestReturnPath(),
+        request: "1",
+      },
+    });
+  };
 
   const handleRequest = async () => {
     try {
@@ -162,6 +197,15 @@ export default function CompanyProfile() {
     if (nextIndex >= 0) setSelectedPhotoIndex(nextIndex);
   };
 
+  const handleBack = () => {
+    if (router.canGoBack?.()) {
+      router.back();
+      return;
+    }
+
+    router.replace("/customer/home");
+  };
+
   const closePhoto = () => {
     setSelectedPhotoIndex(null);
   };
@@ -193,7 +237,7 @@ export default function CompanyProfile() {
     <View style={styles.screen}>
     <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.replace("/customer/home")} style={styles.iconButton}>
+        <TouchableOpacity onPress={handleBack} style={styles.iconButton}>
           <Ionicons name="arrow-back" size={20} color={fixieColors.text} />
         </TouchableOpacity>
         <TouchableOpacity onPress={handleToggleSaved} style={[styles.saveHeaderButton, saved && styles.saveHeaderButtonActive]}>
@@ -204,7 +248,7 @@ export default function CompanyProfile() {
 
       <View style={styles.profileCard}>
         {company.ProfileImageUrl ? <Image source={{ uri: company.ProfileImageUrl }} style={styles.profileImage} /> : <FixieLogo size={72} />}
-        <Text style={styles.companyName}>{company.CompanyName}</Text>
+        <Text style={styles.companyName} dataSet={{ fixieNoTranslate: "true" }}>{company.CompanyName}</Text>
         <Text style={styles.infoText}>Field: {company.CompanyField || "N/A"}</Text>
         <Text style={styles.infoText}>Email: {company.CompanyEmail || "N/A"}</Text>
         <Text style={styles.infoText}>Phone: {company.CompanyPhone || "N/A"}</Text>
@@ -217,7 +261,7 @@ export default function CompanyProfile() {
       <View style={styles.requestBox}>
         <TouchableOpacity
           style={styles.requestCtaButton}
-          onPress={() => setShowRequestForm((current) => !current)}
+          onPress={handleRequestCta}
           activeOpacity={0.82}
         >
           <Ionicons name="paper-plane-outline" size={19} color={fixieColors.background} />
@@ -304,7 +348,7 @@ export default function CompanyProfile() {
         ))}
       </View>
     </ScrollView>
-    <CustomerBottomNav />
+    {isPublicCompanyPage ? null : <CustomerBottomNav />}
     </View>
     <Modal visible={!!selectedPhoto} transparent animationType="fade" onRequestClose={closePhoto}>
       <View style={styles.photoModal}>
@@ -340,6 +384,30 @@ export default function CompanyProfile() {
             {selectedPhoto.caption ? <Text style={styles.photoCaption}>{selectedPhoto.caption}</Text> : null}
           </View>
         ) : null}
+      </View>
+    </Modal>
+    <Modal visible={showAuthPrompt} transparent animationType="fade" onRequestClose={() => setShowAuthPrompt(false)}>
+      <View style={styles.authPromptOverlay}>
+        <View style={styles.authPromptCard}>
+          <TouchableOpacity style={styles.authPromptClose} onPress={() => setShowAuthPrompt(false)}>
+            <Ionicons name="close" size={22} color={fixieColors.text} />
+          </TouchableOpacity>
+          <View style={styles.authPromptIcon}>
+            <Ionicons name="lock-closed-outline" size={28} color={fixieColors.goldLight} />
+          </View>
+          <Text style={styles.authPromptTitle}>Login is required to make a request</Text>
+          <Text style={styles.authPromptText}>
+            Sign in or create a customer account to send your request{company?.CompanyName ? ` to ${company.CompanyName}` : ""}.
+          </Text>
+          <View style={styles.authPromptActions}>
+            <TouchableOpacity style={styles.authPromptPrimary} onPress={() => goToCustomerAuth("/customer/login")}>
+              <Text style={styles.authPromptPrimaryText}>Log In</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.authPromptSecondary} onPress={() => goToCustomerAuth("/customer/signup")}>
+              <Text style={styles.authPromptSecondaryText}>Sign Up</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     </Modal>
     </>
@@ -412,4 +480,15 @@ const styles = StyleSheet.create({
   photoFooter: { position: "absolute", left: 20, right: 20, bottom: 34, alignItems: "center" },
   photoCounter: { color: fixieColors.goldLight, fontWeight: "800", marginBottom: 8 },
   photoCaption: { color: fixieColors.text, fontSize: 15, textAlign: "center", lineHeight: 21 },
+  authPromptOverlay: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.78)", alignItems: "center", justifyContent: "center", padding: 22 },
+  authPromptCard: { width: "100%", maxWidth: 430, borderRadius: 22, backgroundColor: fixieColors.surface, borderWidth: 1, borderColor: fixieColors.border, padding: 22, alignItems: "center", ...fixieShadows.card },
+  authPromptClose: { position: "absolute", top: 12, right: 12, width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: fixieColors.surfaceElevated },
+  authPromptIcon: { width: 58, height: 58, borderRadius: 29, backgroundColor: fixieColors.surfaceElevated, borderWidth: 1, borderColor: fixieColors.border, alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  authPromptTitle: { color: fixieColors.text, fontSize: 22, fontWeight: "900", textAlign: "center", lineHeight: 28, marginBottom: 10 },
+  authPromptText: { color: fixieColors.textSecondary, fontSize: 15, lineHeight: 21, textAlign: "center", marginBottom: 20 },
+  authPromptActions: { width: "100%", gap: 10 },
+  authPromptPrimary: { minHeight: 50, borderRadius: 16, backgroundColor: fixieColors.gold, alignItems: "center", justifyContent: "center" },
+  authPromptPrimaryText: { color: fixieColors.background, fontSize: 16, fontWeight: "900" },
+  authPromptSecondary: { minHeight: 50, borderRadius: 16, backgroundColor: fixieColors.surfaceElevated, borderWidth: 1, borderColor: fixieColors.border, alignItems: "center", justifyContent: "center" },
+  authPromptSecondaryText: { color: fixieColors.goldLight, fontSize: 16, fontWeight: "900" },
 });

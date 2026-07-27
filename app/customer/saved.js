@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import FixieLogo from "../../components/FixieLogo";
+import { getCompanyPublicPath } from "../../lib/company-links";
 import { fixieColors, fixieShadows } from "../../lib/fixie-theme";
 import { loadSavedCompanyIDs, toggleSavedCompany } from "../../lib/saved-companies";
 import { supabase } from "../../lib/supabase";
@@ -102,7 +103,7 @@ export default function SavedCompanies() {
               <TouchableOpacity
                 key={company.CompanyID}
                 style={styles.card}
-                onPress={() => router.push({ pathname: "/customer/companyprofile", params: { id: company.CompanyID } })}
+                onPress={() => router.push(getCompanyPublicPath(company))}
                 activeOpacity={0.75}
               >
                 {company.ProfileImageUrl ? (
@@ -114,12 +115,12 @@ export default function SavedCompanies() {
                 )}
 
                 <View style={styles.cardBody}>
-                  <Text style={styles.companyName} numberOfLines={1}>{company.CompanyName}</Text>
+                  <Text style={styles.companyName} numberOfLines={1} dataSet={{ fixieNoTranslate: "true" }}>{company.CompanyName}</Text>
                   <Text style={styles.companyField} numberOfLines={2}>{company.CompanyField || "General services"}</Text>
                   <View style={styles.cardActions}>
                     <TouchableOpacity
                       style={styles.viewButton}
-                      onPress={(e) => { e.stopPropagation(); router.push({ pathname: "/customer/companyprofile", params: { id: company.CompanyID } }); }}
+                      onPress={(e) => { e.stopPropagation(); router.push(getCompanyPublicPath(company)); }}
                     >
                       <Text style={styles.viewButtonText}>View Profile</Text>
                     </TouchableOpacity>

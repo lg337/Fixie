@@ -2,23 +2,28 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack, usePathname, useRouter } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
+import LanguageMenu from "../components/LanguageMenu";
 
 const CUSTOMER_PUBLIC_ROUTES = new Set(["/", "/customer/login", "/customer/signup"]);
 const COMPANY_PUBLIC_ROUTES = new Set(["/company/login", "/company/signup"]);
 const EMPLOYEE_PUBLIC_ROUTES = new Set(["/employee/login", "/employee/signup"]);
 
+function isPathInSection(pathname, sectionPath) {
+  return pathname === sectionPath || pathname.startsWith(`${sectionPath}/`);
+}
+
 async function getRoleHome(pathname) {
-  if (pathname.startsWith("/customer")) {
+  if (isPathInSection(pathname, "/customer")) {
     const customerID = await AsyncStorage.getItem("customerID");
     return customerID ? "/customer/home" : "/";
   }
 
-  if (pathname.startsWith("/company")) {
+  if (isPathInSection(pathname, "/company")) {
     const companyID = await AsyncStorage.getItem("companyID");
     return companyID ? "/company/home" : "/company/login";
   }
 
-  if (pathname.startsWith("/employee")) {
+  if (isPathInSection(pathname, "/employee")) {
     const employeeID = await AsyncStorage.getItem("employeeID");
     return employeeID ? "/employee/(tabs)" : "/employee/login";
   }
@@ -31,7 +36,7 @@ function shouldResetInitialWebRoute(pathname) {
   if (COMPANY_PUBLIC_ROUTES.has(pathname)) return false;
   if (EMPLOYEE_PUBLIC_ROUTES.has(pathname)) return false;
 
-  return pathname.startsWith("/customer") || pathname.startsWith("/company") || pathname.startsWith("/employee");
+  return isPathInSection(pathname, "/customer") || isPathInSection(pathname, "/company") || isPathInSection(pathname, "/employee");
 }
 
 export default function RootLayout() {
@@ -59,5 +64,10 @@ export default function RootLayout() {
     };
   }, [pathname, router]);
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <>
+      <Stack screenOptions={{ headerShown: false }} />
+      <LanguageMenu />
+    </>
+  );
 }

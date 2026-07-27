@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
-import { Link, router } from "expo-router";
+import { Link, router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -16,6 +16,7 @@ import { fixieColors, fixieShadows } from "../../lib/fixie-theme";
 import { supabase } from "../../lib/supabase";
 
 export default function CustomerSignup() {
+  const { returnTo, request } = useLocalSearchParams();
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -26,6 +27,8 @@ export default function CustomerSignup() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const safeReturnTo = typeof returnTo === "string" && returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "";
+  const postSignupRoute = safeReturnTo ? `${safeReturnTo}${request ? "?request=1" : ""}` : "/customer/home";
 
   const handleSignup = async () => {
     setErrorMsg("");
@@ -98,7 +101,7 @@ export default function CustomerSignup() {
       }
 
       await AsyncStorage.setItem("customerID", String(data.CustomerID));
-      router.replace("/customer/home");
+      router.replace(postSignupRoute);
     } catch {
       setErrorMsg("Something went wrong.");
     } finally {
@@ -114,7 +117,13 @@ export default function CustomerSignup() {
       scroll
       footer={
         <View style={styles.footerLinks}>
-          <Link href="/customer/login" style={styles.linkText}>
+          <Link
+            href={{
+              pathname: "/customer/login",
+              params: safeReturnTo ? { returnTo: safeReturnTo, request: request ? "1" : undefined } : {},
+            }}
+            style={styles.linkText}
+          >
             Already have an account? Login
           </Link>
           <Link href="/" style={styles.linkText}>
