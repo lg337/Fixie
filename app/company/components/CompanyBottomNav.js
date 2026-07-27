@@ -13,6 +13,8 @@ export default function CompanyBottomNav() {
     { label: "Home", icon: "home-outline", route: "/company/home" },
     { label: "Requests", icon: "document-text-outline", route: "/company/requests" },
     { label: "Employees", icon: "people-outline", route: "/company/employees" },
+    { label: "Schedule", icon: "calendar-outline", route: "/company/schedule" },
+    { label: "Finance", icon: "wallet-outline", route: "/company/finance" },
     { label: "CRM", icon: "briefcase-outline", route: "/company/crm" },
   ];
 

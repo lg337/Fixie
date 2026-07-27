@@ -6,6 +6,8 @@ export default function CompanyLayout() {
       <Stack.Screen name="home" />
       <Stack.Screen name="requests" />
       <Stack.Screen name="employees" />
+      <Stack.Screen name="schedule" />
+      <Stack.Screen name="finance" />
       <Stack.Screen name="crm" />
       <Stack.Screen name="profile" />
       <Stack.Screen name="login" />

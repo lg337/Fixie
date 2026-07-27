@@ -127,6 +127,8 @@ export default function CompanyHome() {
         ["Home", "home", "/company/home", true],
         ["Requests", "document-text-outline", "/company/requests", false],
         ["Employees", "people-outline", "/company/employees", false],
+        ["Schedule", "calendar-outline", "/company/schedule", false],
+        ["Finance", "wallet-outline", "/company/finance", false],
         ["CRM", "briefcase-outline", "/company/crm", false],
       ].map(([label, icon, route, active]) => (
         <TouchableOpacity key={route} style={[styles.navButton, layout.isDesktop && styles.desktopNavButton, active && styles.navButtonActive]} onPress={() => router.push(route)}>
