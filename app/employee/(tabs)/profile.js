@@ -25,6 +25,7 @@ import {
   normalizePhoneDigits,
 } from "../../../lib/auth-validation";
 import { fixieColors, fixieShadows } from "../../../lib/fixie-theme";
+import { getRequestDateLabel, getRequestSummary } from "../../../lib/request-dates";
 import { supabase } from "../../../lib/supabase";
 
 const DEFAULT_PROFILE = {
@@ -309,7 +310,7 @@ export default function EmployeeProfile() {
                 <TouchableOpacity onPress={() => openEditor("intro")} style={styles.heroEdit} accessibilityLabel="Edit intro">
                   <Ionicons name="pencil" size={17} color={fixieColors.background} />
                 </TouchableOpacity>
-                <Text style={styles.profileName}>{name || "Add your name"}</Text>
+                <Text style={styles.profileName} dataSet={{ fixieNoTranslate: "true" }}>{name || "Add your name"}</Text>
                 <Text style={[styles.headline, !profile.headline && styles.placeholderText]}>
                   {profile.headline || "Add a headline that shows what you do best"}
                 </Text>
@@ -317,7 +318,12 @@ export default function EmployeeProfile() {
                   <Ionicons name="location-outline" size={15} color={fixieColors.textMuted} />
                   <Text style={styles.metaText}>{profile.location || "Add location"}</Text>
                   {joinedCompanies.length ? <View style={styles.metaDot} /> : null}
-                  {joinedCompanies.length ? <Text style={styles.metaText}>{joinedCompanies.length} workplace{joinedCompanies.length === 1 ? "" : "s"}</Text> : null}
+                  {joinedCompanies.length ? (
+                    <Text style={styles.metaText}>
+                      <Text dataSet={{ fixieNoTranslate: "true" }}>{joinedCompanies.length}</Text>
+                      <Text> {joinedCompanies.length === 1 ? "workplace" : "workplaces"}</Text>
+                    </Text>
+                  ) : null}
                 </View>
               </View>
             </View>
@@ -340,7 +346,17 @@ export default function EmployeeProfile() {
               </Text>
             </Section>
 
-            <Section icon="construct-outline" title="Skills" subtitle={`${profile.skills.length} listed`} onEdit={() => openEditor("skills")}>
+            <Section
+              icon="construct-outline"
+              title="Skills"
+              subtitle={
+                <>
+                  <Text dataSet={{ fixieNoTranslate: "true" }}>{profile.skills.length}</Text>
+                  <Text> listed</Text>
+                </>
+              }
+              onEdit={() => openEditor("skills")}
+            >
               {profile.skills.length ? (
                 <View style={styles.chipWrap}>
                   {profile.skills.map((skill) => <View key={skill} style={styles.chip}><Text style={styles.chipText}>{skill}</Text></View>)}
@@ -348,7 +364,17 @@ export default function EmployeeProfile() {
               ) : <Text style={styles.placeholderText}>Add at least three skills to show where you shine.</Text>}
             </Section>
 
-            <Section icon="briefcase-outline" title="Experience" subtitle={`${profile.experience.length + joinedCompanies.length} roles`} onEdit={() => openEditor("experience")}>
+            <Section
+              icon="briefcase-outline"
+              title="Experience"
+              subtitle={
+                <>
+                  <Text dataSet={{ fixieNoTranslate: "true" }}>{profile.experience.length + joinedCompanies.length}</Text>
+                  <Text> roles</Text>
+                </>
+              }
+              onEdit={() => openEditor("experience")}
+            >
               {profile.experience.map((item) => (
                 <View key={item.id} style={styles.timelineItem}>
                   <View style={styles.timelineMark}><Ionicons name="business" size={17} color={fixieColors.goldLight} /></View>
@@ -365,7 +391,7 @@ export default function EmployeeProfile() {
                   <View style={styles.timelineMark}><Ionicons name="business" size={17} color={fixieColors.goldLight} /></View>
                   <View style={styles.timelineContent}>
                     <Text style={styles.timelineTitle}>Service Professional</Text>
-                    <Text style={styles.timelineCompany}>{companyMap[id] || `Company #${id}`}</Text>
+                    <Text style={styles.timelineCompany} dataSet={{ fixieNoTranslate: "true" }}>{companyMap[id] || `Company #${id}`}</Text>
                     <Text style={styles.timelineMeta}>Verified through Fixie</Text>
                   </View>
                 </View>
@@ -392,8 +418,13 @@ export default function EmployeeProfile() {
                 <View key={String(job.RequestID)} style={styles.jobRow}>
                   <View style={styles.checkCircle}><Ionicons name="checkmark" size={16} color={fixieColors.background} /></View>
                   <View style={styles.jobCopy}>
-                    <Text style={styles.jobTitle}>{job.RequestTitle || job.RequestNotes || "Completed service job"}</Text>
-                    <Text style={styles.jobCompany}>{companyMap[job.CompanyID] || "Verified on Fixie"}</Text>
+                    <Text style={styles.jobTitle}>{getRequestSummary(job, "Completed service job")}</Text>
+                    <Text style={styles.jobCompany} dataSet={{ fixieNoTranslate: "true" }}>{companyMap[job.CompanyID] || "Verified on Fixie"}</Text>
+                    <Text style={styles.jobDate}>
+                      <Text>Request date</Text>
+                      <Text>: </Text>
+                      <Text>{getRequestDateLabel(job)}</Text>
+                    </Text>
                   </View>
                 </View>
               ))}
@@ -614,6 +645,7 @@ const styles = StyleSheet.create({
   jobCopy: { flex: 1, marginLeft: 10 },
   jobTitle: { color: fixieColors.text, fontSize: 13, fontWeight: "700" },
   jobCompany: { color: fixieColors.textMuted, fontSize: 11, marginTop: 2 },
+  jobDate: { color: fixieColors.textMuted, fontSize: 11, marginTop: 2, fontWeight: "700" },
   modalBackdrop: { flex: 1, backgroundColor: fixieColors.overlay, justifyContent: "flex-end" },
   modalSheet: { backgroundColor: fixieColors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: "90%", minHeight: "55%", borderWidth: 1, borderColor: fixieColors.border },
   modalHandle: { width: 42, height: 4, borderRadius: 2, backgroundColor: fixieColors.border, alignSelf: "center", marginTop: 9 },

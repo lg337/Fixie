@@ -8,6 +8,7 @@ import { getCompanyIDFromPublicSlug, getCompanyPublicPath } from "../../lib/comp
 import { loadCompanyPosts } from "../../lib/company-posts";
 import { formatPlannerItemForRequest, loadCustomerPlannerItems } from "../../lib/customer-planner";
 import { fixieColors, fixieShadows } from "../../lib/fixie-theme";
+import { stampNewRequestNotes } from "../../lib/request-dates";
 import { notifyRequestsChanged } from "../../lib/request-updates";
 import { isCompanySaved, toggleSavedCompany } from "../../lib/saved-companies";
 import { supabase } from "../../lib/supabase";
@@ -137,7 +138,7 @@ export default function CompanyProfile() {
       if (customerError) throw customerError;
 
       const { error: requestError } = await supabase.from("RequestTable").insert([
-        { CompanyID: companyID, CustomerID: customerID, RequestTitle: null, RequestNotes: requestNotes, RequestStatus: "new" },
+        { CompanyID: companyID, CustomerID: customerID, RequestTitle: null, RequestNotes: stampNewRequestNotes(requestNotes), RequestStatus: "new" },
       ]);
       if (requestError) throw requestError;
 

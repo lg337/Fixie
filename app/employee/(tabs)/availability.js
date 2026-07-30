@@ -120,7 +120,16 @@ export default function EmployeeAvailability() {
           <View style={styles.summaryDivider} />
           <View style={styles.summaryCopy}>
             <Text style={styles.summaryTitle}>{activeCount ? "Ready for opportunities" : "Set your first window"}</Text>
-            <Text style={styles.summaryText}>{activeCount ? `${new Set(availability.filter((item) => item.enabled).map((item) => item.day)).size} days currently open` : "Tell companies when you are open to work."}</Text>
+            <Text style={styles.summaryText}>
+              {activeCount ? (
+                <>
+                  <Text dataSet={{ fixieNoTranslate: "true" }}>{new Set(availability.filter((item) => item.enabled).map((item) => item.day)).size}</Text>
+                  <Text> days currently open</Text>
+                </>
+              ) : (
+                "Tell companies when you are open to work."
+              )}
+            </Text>
           </View>
         </View>
 

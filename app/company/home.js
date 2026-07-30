@@ -17,6 +17,8 @@ import {
 import FixieLogo from "../../components/FixieLogo";
 import { fixieColors, fixieShadows, fixieStatusColors } from "../../lib/fixie-theme";
 import { COMPANY_TRACKER_OPTIONS, getTrackerStage } from "../../lib/project-tracker";
+import { appendDatedRequestUpdate, getRequestDateLabel, getRequestSummary } from "../../lib/request-dates";
+import { speakRequest } from "../../lib/request-speech";
 import { supabase } from "../../lib/supabase";
 import useFixieLayout from "../../lib/useFixieLayout";
 
@@ -86,8 +88,15 @@ export default function CompanyHome() {
     router.replace("/");
   };
 
-  const updateStatus = async (requestID, newStatus) => {
-    const { error } = await supabase.from("RequestTable").update({ RequestStatus: newStatus }).eq("RequestID", requestID);
+  const updateStatus = async (request, newStatus) => {
+    const nextStage = getTrackerStage(newStatus);
+    const { error } = await supabase
+      .from("RequestTable")
+      .update({
+        RequestStatus: newStatus,
+        RequestNotes: appendDatedRequestUpdate(request.RequestNotes, `Status changed to ${nextStage.label}.`),
+      })
+      .eq("RequestID", request.RequestID);
     if (error) {
       Alert.alert("Error", "Failed to update status.");
       return;
@@ -97,7 +106,17 @@ export default function CompanyHome() {
 
   const renderRequestItem = ({ item }) => (
     <View style={styles.requestCard}>
-      <Text style={styles.requestTitle}>{item.RequestTitle || item.RequestNotes || "Untitled Request"}</Text>
+      <View style={styles.requestTitleRow}>
+        <Text style={styles.requestTitle}>{getRequestSummary(item, "Untitled Request")}</Text>
+        <TouchableOpacity style={styles.speakerButton} onPress={() => speakRequest(item, "Untitled Request")} accessibilityLabel="Read request aloud">
+          <Ionicons name="volume-high-outline" size={17} color={fixieColors.goldLight} />
+        </TouchableOpacity>
+      </View>
+      <Text style={styles.requestDate}>
+        <Text>Request date</Text>
+        <Text>: </Text>
+        <Text>{getRequestDateLabel(item)}</Text>
+      </Text>
       <Text style={styles.requestDescription}>{item.RequestDescription || item.RequestNotes || "No description provided"}</Text>
       <View style={styles.statusRow}>
         {COMPANY_TRACKER_OPTIONS.map((s) => {
@@ -110,7 +129,7 @@ export default function CompanyHome() {
                 active ? { backgroundColor: fixieStatusColors[s.key] || fixieColors.gold } : styles.statusPillIdle,
               ]}
               onPress={() => {
-                if (!active) updateStatus(item.RequestID, s.key);
+                if (!active) updateStatus(item, s.key);
               }}
             >
               <Text style={[styles.statusPillText, active && styles.statusPillTextActive]}>{s.label}</Text>
@@ -217,7 +236,10 @@ const styles = StyleSheet.create({
   desktopBox: { padding: 20 },
   boxTitle: { fontSize: 20, fontWeight: "800", color: fixieColors.text, marginBottom: 12 },
   requestCard: { backgroundColor: fixieColors.surfaceElevated, borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: fixieColors.border },
-  requestTitle: { fontSize: 16, fontWeight: "700", color: fixieColors.text, marginBottom: 4 },
+  requestTitleRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
+  requestTitle: { flex: 1, fontSize: 16, fontWeight: "700", color: fixieColors.text, marginBottom: 4 },
+  speakerButton: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: fixieColors.backgroundAlt, borderWidth: 1, borderColor: fixieColors.border },
+  requestDate: { fontSize: 12, color: fixieColors.textMuted, fontWeight: "700", marginBottom: 6 },
   requestDescription: { fontSize: 14, color: fixieColors.textSecondary, marginBottom: 8 },
   statusRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
   statusPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },

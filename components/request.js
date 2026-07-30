@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { formatPlannerItemForRequest, loadCustomerPlannerItems } from "../lib/customer-planner";
 import { fixieColors, fixieShadows } from "../lib/fixie-theme";
+import { stampNewRequestNotes } from "../lib/request-dates";
 import { notifyRequestsChanged } from "../lib/request-updates";
 import { supabase } from "../lib/supabase";
 
@@ -92,7 +93,7 @@ export default function RequestModal({ visible, onClose, companyID, customerID, 
         const { error } = await supabase.from("RequestTable").insert({
           CompanyID: companyID,
           CustomerID: customerID,
-          RequestNotes: requestNotes,
+          RequestNotes: stampNewRequestNotes(requestNotes),
           RequestStatus: "new",
         });
         if (error) throw error;

@@ -112,7 +112,10 @@ export default function CompanySchedule() {
         <View style={styles.header}>
           <View>
             <Text style={styles.eyebrow}>TEAM CALENDAR</Text>
-            <Text style={styles.title}>{companyName} schedule</Text>
+            <Text style={styles.title}>
+              <Text dataSet={{ fixieNoTranslate: "true" }}>{companyName}</Text>
+              <Text> schedule</Text>
+            </Text>
             <Text style={styles.subtitle}>Set your business hours and see when your whole team is available.</Text>
           </View>
           <View style={styles.headerIcon}><Ionicons name="calendar" size={25} color={fixieColors.goldLight} /></View>
@@ -164,7 +167,7 @@ export default function CompanySchedule() {
             <View key={employee.EmployeeID} style={styles.employeeRow}>
               <View style={styles.avatar}><Text style={styles.avatarText}>{employee.EmployeeName?.[0] || "?"}</Text></View>
               <View style={styles.employeeCopy}>
-                <Text style={styles.employeeName}>{employee.EmployeeName || "Unnamed employee"}</Text>
+                <Text style={styles.employeeName} dataSet={{ fixieNoTranslate: "true" }}>{employee.EmployeeName || "Unnamed employee"}</Text>
                 {employee.windows.length ? employee.windows.map((window) => (
                   <Text key={window.id} style={styles.employeeTime}>{window.start} – {window.end}</Text>
                 )) : <Text style={styles.unavailableText}>No availability published for {selectedDay}</Text>}

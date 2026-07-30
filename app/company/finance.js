@@ -151,7 +151,14 @@ export default function CompanyFinance() {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={[styles.content, layout.isDesktop && styles.desktopContent]} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <View><Text style={styles.eyebrow}>MONEY MANAGEMENT</Text><Text style={styles.title}>{companyName} finances</Text><Text style={styles.subtitle}>Track cash flow, understand performance, and manage employee payroll.</Text></View>
+          <View>
+            <Text style={styles.eyebrow}>MONEY MANAGEMENT</Text>
+            <Text style={styles.title}>
+              <Text dataSet={{ fixieNoTranslate: "true" }}>{companyName}</Text>
+              <Text> finances</Text>
+            </Text>
+            <Text style={styles.subtitle}>Track cash flow, understand performance, and manage employee payroll.</Text>
+          </View>
           <TouchableOpacity style={styles.headerIcon} onPress={() => { setAccountDraft(account); setAccountModal(true); }}><Ionicons name="settings-outline" size={23} color={fixieColors.goldLight} /></TouchableOpacity>
         </View>
 
@@ -187,7 +194,13 @@ export default function CompanyFinance() {
           <View style={styles.employeeCount}><Text style={styles.employeeCountValue}>{employees.length}</Text><Text style={styles.employeeCountLabel}>employees</Text></View>
         </View>
 
-        <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Recent activity</Text><Text style={styles.sectionMeta}>{transactions.length} records</Text></View>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recent activity</Text>
+          <Text style={styles.sectionMeta}>
+            <Text dataSet={{ fixieNoTranslate: "true" }}>{transactions.length}</Text>
+            <Text> records</Text>
+          </Text>
+        </View>
         <View style={styles.activityCard}>
           {!transactions.length ? <View style={styles.empty}><Ionicons name="receipt-outline" size={30} color={fixieColors.goldLight} /><Text style={styles.emptyTitle}>No financial activity yet</Text><Text style={styles.emptyText}>Record income, expenses, or payroll to build your insights.</Text></View> :
             transactions.map((item) => (

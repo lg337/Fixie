@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import FixieLogo from "../../../components/FixieLogo";
 import { fixieColors, fixieShadows } from "../../../lib/fixie-theme";
-import { isActiveRequestStatus, isNewRequestStatus } from "../../../lib/project-tracker";
+import { getTrackerProgress, getTrackerStage, isActiveRequestStatus, isNewRequestStatus } from "../../../lib/project-tracker";
+import { appendDatedRequestUpdate, getRequestDateLabel, getRequestSummary } from "../../../lib/request-dates";
+import { speakRequest } from "../../../lib/request-speech";
 import { supabase } from "../../../lib/supabase";
 
 function SectionHeader({ icon, title, count }) {
@@ -20,15 +22,50 @@ function SectionHeader({ icon, title, count }) {
   );
 }
 
-function JobCard({ title, subtitle, customerName, customerPhone, customerEmail, actionLabel, actionColor, onAction, onDecline }) {
+function JobCard({ request, title, subtitle, requestDate, customerName, customerPhone, customerEmail, actionLabel, actionColor, onAction, onDecline }) {
+  const stage = getTrackerStage(request?.RequestStatus);
+  const progress = getTrackerProgress(request?.RequestStatus);
+
   return (
     <View style={styles.card}>
       <View style={styles.cardLeft}>
-        <Text style={styles.cardTitle}>{title}</Text>
-        <Text style={styles.cardSubtitle}>{subtitle}</Text>
-        <Text style={styles.cardMeta}>Customer: {customerName || "Unknown"}</Text>
-        <Text style={styles.cardMeta}>Phone: {customerPhone || "No phone"}</Text>
-        <Text style={styles.cardMeta}>Email: {customerEmail || "No email"}</Text>
+        <View style={styles.cardTitleRow}>
+          <Text style={styles.cardTitle}>{title}</Text>
+          <TouchableOpacity style={styles.speakerButton} onPress={() => speakRequest(request, "Untitled Job")} accessibilityLabel="Read request aloud">
+            <Ionicons name="volume-high-outline" size={17} color={fixieColors.goldLight} />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.cardSubtitle} dataSet={{ fixieNoTranslate: "true" }}>{subtitle}</Text>
+        <Text style={styles.cardDate}>
+          <Text>Request date</Text>
+          <Text>: </Text>
+          <Text>{requestDate}</Text>
+        </Text>
+        <Text style={styles.cardMeta}>
+          <Text>Customer</Text>
+          <Text>: </Text>
+          <Text dataSet={{ fixieNoTranslate: "true" }}>{customerName || "Unknown"}</Text>
+        </Text>
+        <Text style={styles.cardMeta}>
+          <Text>Phone</Text>
+          <Text>: </Text>
+          <Text dataSet={{ fixieNoTranslate: "true" }}>{customerPhone || "No phone"}</Text>
+        </Text>
+        <Text style={styles.cardMeta}>
+          <Text>Email</Text>
+          <Text>: </Text>
+          <Text dataSet={{ fixieNoTranslate: "true" }}>{customerEmail || "No email"}</Text>
+        </Text>
+        <View style={styles.trackerMini}>
+          <View style={styles.trackerMiniTop}>
+            <Text style={styles.trackerMiniLabel}>Project tracker</Text>
+            <Text style={styles.trackerMiniStage}>{stage.label}</Text>
+          </View>
+          <View style={styles.trackerMiniTrack}>
+            <View style={[styles.trackerMiniFill, { width: `${progress}%` }]} />
+          </View>
+          <Text style={styles.trackerMiniText}>{progress}% complete</Text>
+        </View>
       </View>
       <View style={styles.actionColumn}>
         {actionLabel ? (
@@ -108,8 +145,15 @@ export default function EmployeeDashboard() {
     }
   };
 
-  const updateStatus = async (requestID, newStatus) => {
-    const { error } = await supabase.from("RequestTable").update({ RequestStatus: newStatus }).eq("RequestID", requestID);
+  const updateStatus = async (request, newStatus) => {
+    const nextStage = getTrackerStage(newStatus);
+    const { error } = await supabase
+      .from("RequestTable")
+      .update({
+        RequestStatus: newStatus,
+        RequestNotes: appendDatedRequestUpdate(request.RequestNotes, `Employee changed status to ${nextStage.label}.`),
+      })
+      .eq("RequestID", request.RequestID);
     if (error) {
       Alert.alert("Error", "Failed to update status.");
       return;
@@ -117,14 +161,21 @@ export default function EmployeeDashboard() {
     loadDashboard();
   };
 
-  const declineJob = async (requestID) => {
+  const declineJob = async (request) => {
     Alert.alert("Decline Job", "Are you sure you want to decline this job?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Decline",
         style: "destructive",
         onPress: async () => {
-          const { error } = await supabase.from("RequestTable").update({ AssignedEmployeeID: null, RequestStatus: "new" }).eq("RequestID", requestID);
+          const { error } = await supabase
+            .from("RequestTable")
+            .update({
+              AssignedEmployeeID: null,
+              RequestStatus: "new",
+              RequestNotes: appendDatedRequestUpdate(request.RequestNotes, "Employee declined the job; request moved back to New."),
+            })
+            .eq("RequestID", request.RequestID);
           if (error) {
             Alert.alert("Error", "Failed to decline job.");
             return;
@@ -153,7 +204,10 @@ export default function EmployeeDashboard() {
                 <FixieLogo size={48} />
                 <View>
                   <Text style={styles.eyebrow}>Employee Dashboard</Text>
-                  <Text style={styles.header}>Hi, {employeeName}</Text>
+                  <Text style={styles.header}>
+                    <Text>Hi, </Text>
+                    <Text dataSet={{ fixieNoTranslate: "true" }}>{employeeName}</Text>
+                  </Text>
                 </View>
               </View>
               <TouchableOpacity onPress={handleLogout} style={styles.iconButton}>
@@ -165,14 +219,16 @@ export default function EmployeeDashboard() {
             {activeJobs.length === 0 ? <Text style={styles.emptyText}>No active jobs right now.</Text> : activeJobs.map((job) => (
               <JobCard
                 key={String(job.RequestID)}
-                title={job.RequestNotes || job.RequestTitle || "Untitled Job"}
+                request={job}
+                title={getRequestSummary(job, "Untitled Job")}
                 subtitle={companyMap[job.CompanyID] || `Company #${job.CompanyID}`}
+                requestDate={getRequestDateLabel(job)}
                 customerName={job.CustomerTable?.CustomerName}
                 customerPhone={job.CustomerTable?.CustomerPhone}
                 customerEmail={job.CustomerTable?.CustomerEmail}
                 actionLabel="Mark Complete"
                 actionColor={fixieColors.success}
-                onAction={() => updateStatus(job.RequestID, "completed")}
+                onAction={() => updateStatus(job, "completed")}
               />
             ))}
 
@@ -180,15 +236,17 @@ export default function EmployeeDashboard() {
             {newRequests.length === 0 ? <Text style={styles.emptyText}>No new requests.</Text> : newRequests.map((r) => (
               <JobCard
                 key={String(r.RequestID)}
-                title={r.RequestNotes || r.RequestTitle || "Untitled Request"}
+                request={r}
+                title={getRequestSummary(r, "Untitled Request")}
                 subtitle={companyMap[r.CompanyID] || `Company #${r.CompanyID}`}
+                requestDate={getRequestDateLabel(r)}
                 customerName={r.CustomerTable?.CustomerName}
                 customerPhone={r.CustomerTable?.CustomerPhone}
                 customerEmail={r.CustomerTable?.CustomerEmail}
                 actionLabel="Accept Job"
                 actionColor={fixieColors.gold}
-                onAction={() => updateStatus(r.RequestID, "labor")}
-                onDecline={() => declineJob(r.RequestID)}
+                onAction={() => updateStatus(r, "labor")}
+                onDecline={() => declineJob(r)}
               />
             ))}
           </>
@@ -216,9 +274,19 @@ const styles = StyleSheet.create({
   emptyText: { color: fixieColors.textMuted, marginBottom: 10, marginTop: 6 },
   card: { backgroundColor: fixieColors.surface, borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: fixieColors.border, flexDirection: "row", gap: 12, ...fixieShadows.card },
   cardLeft: { flex: 1 },
-  cardTitle: { fontSize: 16, fontWeight: "800", color: fixieColors.text },
+  cardTitleRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
+  cardTitle: { flex: 1, fontSize: 16, fontWeight: "800", color: fixieColors.text },
+  speakerButton: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: fixieColors.backgroundAlt, borderWidth: 1, borderColor: fixieColors.border },
   cardSubtitle: { color: fixieColors.goldLight, marginTop: 4, fontWeight: "600" },
+  cardDate: { color: fixieColors.textMuted, marginTop: 4, fontSize: 12, fontWeight: "700" },
   cardMeta: { color: fixieColors.textSecondary, marginTop: 4, fontSize: 12 },
+  trackerMini: { backgroundColor: fixieColors.backgroundAlt, borderRadius: 14, borderWidth: 1, borderColor: fixieColors.border, padding: 11, marginTop: 11 },
+  trackerMiniTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  trackerMiniLabel: { color: fixieColors.goldLight, fontSize: 10, fontWeight: "800", textTransform: "uppercase" },
+  trackerMiniStage: { color: fixieColors.textSecondary, fontSize: 11, fontWeight: "800", flexShrink: 1, textAlign: "right" },
+  trackerMiniTrack: { height: 7, borderRadius: 999, backgroundColor: fixieColors.surfaceElevated, overflow: "hidden", marginTop: 8 },
+  trackerMiniFill: { height: "100%", borderRadius: 999, backgroundColor: fixieColors.gold },
+  trackerMiniText: { color: fixieColors.textMuted, fontSize: 11, fontWeight: "700", marginTop: 6 },
   actionColumn: { justifyContent: "center", gap: 8 },
   actionBtn: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, minWidth: 96, alignItems: "center" },
   actionBtnText: { color: fixieColors.background, fontWeight: "800", fontSize: 12 },

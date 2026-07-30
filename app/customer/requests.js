@@ -21,6 +21,7 @@ import {
   getTrackerStageIndex,
   isCompletedRequestStatus,
 } from "../../lib/project-tracker";
+import { getRequestDateLabel } from "../../lib/request-dates";
 import { subscribeToRequestChanges } from "../../lib/request-updates";
 import { supabase } from "../../lib/supabase";
 import CustomerBottomNav from "./components/CustomerBottomNav";
@@ -145,6 +146,11 @@ export default function CustomerRequests() {
           </View>
         </View>
 
+        <Text style={styles.dateMeta}>
+          <Text>Request date</Text>
+          <Text>: </Text>
+          <Text>{getRequestDateLabel(item)}</Text>
+        </Text>
         <Text style={styles.description}>{item.RequestNotes || "No request details were provided."}</Text>
         <View style={styles.trackerPanel}>
           <View style={styles.progressHeader}>
@@ -314,6 +320,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: fixieColors.textSecondary,
+  },
+  dateMeta: {
+    marginTop: 10,
+    fontSize: 12,
+    color: fixieColors.textMuted,
+    fontWeight: "700",
   },
   meta: {
     marginTop: 10,

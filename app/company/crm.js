@@ -256,7 +256,16 @@ export default function CompanyCRM() {
 
       <View style={styles.topBar}>
         <View>
-          <Text style={styles.pageTitle}>{companyName ? `${companyName} CRM` : "Company CRM"}</Text>
+          <Text style={styles.pageTitle}>
+            {companyName ? (
+              <>
+                <Text dataSet={{ fixieNoTranslate: "true" }}>{companyName}</Text>
+                <Text> CRM</Text>
+              </>
+            ) : (
+              "Company CRM"
+            )}
+          </Text>
           <Text style={styles.subtitle}>Manage customer contacts and notes</Text>
         </View>
         <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>

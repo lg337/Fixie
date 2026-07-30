@@ -24,6 +24,8 @@ import {
   isCompletedRequestStatus,
   isNewRequestStatus,
 } from "../../lib/project-tracker";
+import { appendDatedRequestUpdate, getRequestDateLabel, getRequestSummary } from "../../lib/request-dates";
+import { speakRequest } from "../../lib/request-speech";
 import { notifyRequestsChanged, subscribeToRequestChanges } from "../../lib/request-updates";
 import { supabase } from "../../lib/supabase";
 import CompanyBottomNav from "./components/CompanyBottomNav";
@@ -102,8 +104,15 @@ export default function CompanyRequests() {
     };
   }, []);
 
-  const updateStatus = async (requestID, newStatus) => {
-    const { error } = await supabase.from("RequestTable").update({ RequestStatus: newStatus }).eq("RequestID", requestID);
+  const updateStatus = async (request, newStatus) => {
+    const nextStage = getTrackerStage(newStatus);
+    const { error } = await supabase
+      .from("RequestTable")
+      .update({
+        RequestStatus: newStatus,
+        RequestNotes: appendDatedRequestUpdate(request.RequestNotes, `Status changed to ${nextStage.label}.`),
+      })
+      .eq("RequestID", request.RequestID);
     if (error) {
       Alert.alert("Error", "Failed to update status.");
       return;
@@ -118,7 +127,18 @@ export default function CompanyRequests() {
   };
 
   const assignEmployee = async (employeeID) => {
-    const { error } = await supabase.from("RequestTable").update({ AssignedEmployeeID: employeeID }).eq("RequestID", selectedRequestID);
+    const selectedRequest = requests.find((request) => request.RequestID === selectedRequestID);
+    const employee = employees.find((item) => item.EmployeeID === employeeID);
+    const { error } = await supabase
+      .from("RequestTable")
+      .update({
+        AssignedEmployeeID: employeeID,
+        RequestNotes: appendDatedRequestUpdate(
+          selectedRequest?.RequestNotes,
+          `Assigned to ${employee?.EmployeeName || `employee #${employeeID}`}.`
+        ),
+      })
+      .eq("RequestID", selectedRequestID);
     if (error) {
       Alert.alert("Error", "Failed to assign employee.");
       return;
@@ -148,15 +168,33 @@ export default function CompanyRequests() {
     return (
       <View style={styles.card}>
         <View style={styles.cardTopRow}>
-          <Text style={styles.title}>{item.RequestTitle || item.RequestNotes || "Untitled Request"}</Text>
-          <View style={[styles.currentStageBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.currentStageText}>{stage.label}</Text>
+          <Text style={styles.title}>{getRequestSummary(item, "Untitled Request")}</Text>
+          <View style={styles.cardActions}>
+            <TouchableOpacity style={styles.speakerButton} onPress={() => speakRequest(item, "Untitled Request")} accessibilityLabel="Read request aloud">
+              <Ionicons name="volume-high-outline" size={18} color={fixieColors.goldLight} />
+            </TouchableOpacity>
+            <View style={[styles.currentStageBadge, { backgroundColor: statusColor }]}>
+              <Text style={styles.currentStageText}>{stage.label}</Text>
+            </View>
           </View>
         </View>
+        <Text style={styles.dateMeta}>
+          <Text>Request date</Text>
+          <Text>: </Text>
+          <Text>{getRequestDateLabel(item)}</Text>
+        </Text>
         <Text style={styles.description}>{item.RequestNotes || "No description"}</Text>
         <Text style={styles.meta}>From: {item.CustomerTable?.CustomerName || "Unknown Customer"}</Text>
-        <Text style={styles.meta}>Phone: {item.CustomerTable?.CustomerPhone || "No phone"}</Text>
-        <Text style={styles.meta}>Email: {item.CustomerTable?.CustomerEmail || "No email"}</Text>
+        <Text style={styles.meta}>
+          <Text>Phone</Text>
+          <Text>: </Text>
+          <Text dataSet={{ fixieNoTranslate: "true" }}>{item.CustomerTable?.CustomerPhone || "No phone"}</Text>
+        </Text>
+        <Text style={styles.meta}>
+          <Text>Email</Text>
+          <Text>: </Text>
+          <Text dataSet={{ fixieNoTranslate: "true" }}>{item.CustomerTable?.CustomerEmail || "No email"}</Text>
+        </Text>
 
         <View style={styles.assignRow}>
           <Text style={styles.meta}>Assigned to: {item.EmployeeTable?.EmployeeName || "Unassigned"}</Text>
@@ -198,7 +236,7 @@ export default function CompanyRequests() {
                 key={s.key}
                 style={[styles.statusPill, active ? { backgroundColor: fixieStatusColors[s.key] || fixieColors.gold } : styles.statusPillIdle]}
                 onPress={() => {
-                  if (!active) updateStatus(item.RequestID, s.key);
+                  if (!active) updateStatus(item, s.key);
                 }}
               >
                 <Text style={[styles.statusPillText, active && styles.statusPillTextActive]}>{s.label}</Text>
@@ -288,6 +326,9 @@ const styles = StyleSheet.create({
   card: { backgroundColor: fixieColors.surface, borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: fixieColors.border, ...fixieShadows.card },
   cardTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10 },
   title: { fontSize: 17, fontWeight: "800", marginBottom: 6, color: fixieColors.text },
+  cardActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  speakerButton: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: fixieColors.backgroundAlt, borderWidth: 1, borderColor: fixieColors.border },
+  dateMeta: { fontSize: 12, color: fixieColors.textMuted, fontWeight: "700", marginBottom: 6 },
   description: { fontSize: 14, color: fixieColors.textSecondary, marginBottom: 10 },
   meta: { fontSize: 12, color: fixieColors.textMuted, marginBottom: 2 },
   currentStageBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
